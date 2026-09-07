@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSN Guard Dashboard</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="logo-icon">🛡️</div>
+        <div class="logo-text">
+          <h1>OSN Guard</h1>
+          <span class="sub-logo">Social Safety Shield</span>
+        </div>
+      </div>
+      <button id="settings-btn" class="icon-btn" title="Open Settings" aria-label="Open Settings">⚙️</button>
+    </header>
+
+    <!-- Main Score Section -->
+    <section class="score-section">
+      <div class="score-card">
+        <div class="score-radial">
+          <svg class="progress-ring" width="120" height="120" aria-hidden="true">
+            <circle class="progress-ring__circle-bg" stroke="rgba(255, 255, 255, 0.05)" stroke-width="8" fill="transparent" r="50" cx="60" cy="60" />
+            <circle class="progress-ring__circle" stroke="url(#score-gradient)" stroke-width="8" stroke-dasharray="314.16 314.16" stroke-dashoffset="0" stroke-linecap="round" fill="transparent" r="50" cx="60" cy="60" />
+            <defs>
+              <linearGradient id="score-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#10b981" />
+                <stop offset="100%" stop-color="#3b82f6" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="score-display">
+            <span id="score-value">100</span>
+            <span class="score-percent">%</span>
+          </div>
+        </div>
+        <div class="score-info">
+          <h2 id="status-text">Connection Secure</h2>
+          <p id="status-desc">Active shields are scanning the current page.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Stats Grid -->
+    <section class="stats-section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-num" id="stat-scanned">0</span>
+          <span class="stat-lbl">Links Checked</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" id="stat-pii">0</span>
+          <span class="stat-lbl">PII Blocks</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" id="stat-threats">0</span>
+          <span class="stat-lbl">Threats Found</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Shields Toggles -->
+    <section class="shields-section">
+      <h3>Protection Shields</h3>
+      <div class="shield-list">
+        <div class="shield-item">
+          <div class="shield-label">
+            <span class="shield-icon">📧</span>
+            <div class="shield-details">
+              <h4>PII Leak Protection</h4>
+              <p>Block emails, phone numbers, cards, SSNs</p>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="shield-pii" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="shield-item">
+          <div class="shield-label">
+            <span class="shield-icon">🔗</span>
+            <div class="shield-details">
+              <h4>Link Reputation Scanner</h4>
+              <p>Detect phishing and malicious links</p>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="shield-url" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="shield-item">
+          <div class="shield-label">
+            <span class="shield-icon">💬</span>
+            <div class="shield-details">
+              <h4>Scam & Fraud Detector</h4>
+              <p>Filter crypto fraud, drainers, and phishing</p>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="shield-content" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="shield-item">
+          <div class="shield-label">
+            <span class="shield-icon">🔒</span>
+            <div class="shield-details">
+              <h4>Insecure Form Warning</h4>
+              <p>Alert on HTTP unencrypted forms</p>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="shield-security" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Threats Summary List -->
+    <section class="threats-section">
+      <div class="section-header">
+        <h3>Page Scanning Report</h3>
+        <button id="rescan-btn" class="text-btn">Rescan Page</button>
+      </div>
+      <div class="threat-list" id="threats-container">
+        <!-- Threats populated dynamically -->
+        <div class="empty-state">
+          <div class="success-check">✓</div>
+          <p>No active threats detected on this tab.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span>Protected by OSN Guard v1.1</span>
+      <a href="#" id="view-options-link">Advanced Options</a>
+    </footer>
+  </div>
+  <script src="../core/url-analyzer.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "osn-guard",
+  "version": "1.1.0",
+  "description": "OSN Guard - Safety & Privacy Shield for Social Networks",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:watch": "node --test --watch tests/*.test.js"
+  },
+  "keywords": [
+    "chrome-extension",
+    "privacy",
+    "security",
+    "pii-detection",
+    "phishing-protection",
+    "anti-scam"
+  ],
+  "author": "",
+  "license": "MIT"
+}

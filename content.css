@@ -1,0 +1,181 @@
+/* CSS styles injected into web pages by OSN Guard */
+
+/* Badge styles */
+.osn-guard-warning-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  margin-left: 6px !important;
+  margin-right: 2px !important;
+  cursor: help !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: bold !important;
+  color: #ffffff !important;
+  vertical-align: middle !important;
+  position: relative !important;
+  z-index: 999999 !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  user-select: none !important;
+  line-height: 1 !important;
+}
+
+.osn-guard-warning-badge:hover {
+  transform: scale(1.2) !important;
+}
+
+.osn-guard-badge-warning {
+  background-color: #f59e0b !important; /* Amber */
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6) !important;
+}
+
+.osn-guard-badge-critical {
+  background-color: #ef4444 !important; /* Red */
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.8) !important;
+  animation: osn-guard-pulse 1.5s infinite alternate !important;
+}
+
+/* Tooltip container */
+.osn-guard-tooltip-wrapper {
+  position: relative !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+}
+
+/* Global floating tooltip attached to body to prevent overflow clipping */
+.osn-guard-floating-tooltip {
+  position: fixed !important;
+  z-index: 2147483647 !important; /* Above all site overlays */
+  width: 250px !important;
+  background: #111827 !important;
+  color: #f3f4f6 !important;
+  text-align: left !important;
+  border-radius: 8px !important;
+  padding: 10px 12px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid #374151 !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  font-weight: normal !important;
+  pointer-events: none !important;
+  transition: opacity 0.15s ease-out !important;
+}
+
+.osn-guard-tooltip-header {
+  font-weight: bold !important;
+  margin-bottom: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 12px !important;
+}
+
+.osn-guard-tooltip-header.warning {
+  color: #fbbf24 !important;
+}
+
+.osn-guard-tooltip-header.critical {
+  color: #f87171 !important;
+}
+
+.osn-guard-tooltip-body {
+  color: #d1d5db !important;
+  font-size: 11px !important;
+  word-break: break-word !important;
+}
+
+/* Input warning styling */
+.osn-guard-input-warning {
+  border: 2px solid #f59e0b !important;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4) !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+
+.osn-guard-input-critical {
+  border: 2px solid #ef4444 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5) !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+
+/* Inline floating input banner alerts */
+.osn-guard-input-alert-banner {
+  position: absolute !important;
+  background: #111827 !important;
+  color: #f3f4f6 !important;
+  border: 1px solid #374151 !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  z-index: 2147483640 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  pointer-events: auto !important;
+  animation: osn-guard-fade-in 0.2s ease-out !important;
+  max-width: 90vw !important;
+}
+
+.osn-guard-alert-text {
+  color: #e5e7eb !important;
+}
+
+.osn-guard-input-alert-banner span.close-btn {
+  cursor: pointer !important;
+  color: #9ca3af !important;
+  font-weight: bold !important;
+  margin-left: 6px !important;
+  padding: 0 4px !important;
+  border-radius: 3px !important;
+  user-select: none !important;
+}
+
+.osn-guard-input-alert-banner span.close-btn:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.osn-guard-alert-icon {
+  width: 14px !important;
+  height: 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  color: #fff !important;
+  font-weight: bold !important;
+  font-size: 9px !important;
+  flex-shrink: 0 !important;
+}
+
+.osn-guard-alert-icon.warning {
+  background-color: #f59e0b !important;
+}
+
+.osn-guard-alert-icon.critical {
+  background-color: #ef4444 !important;
+}
+
+/* Animations */
+@keyframes osn-guard-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes osn-guard-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

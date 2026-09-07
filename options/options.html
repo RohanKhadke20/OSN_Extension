@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSN Guard Settings</title>
+  <link rel="stylesheet" href="../popup/popup.css">
+  <style>
+    /* Options page layout additions */
+    body {
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 20px;
+    }
+    .options-wrapper {
+      max-width: 680px;
+      width: 100%;
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .options-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    .options-title h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .options-title p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .settings-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .settings-group {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .settings-group h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .input-field, .select-field {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #fff;
+      font-family: var(--font-family);
+      font-size: 13px;
+      margin-top: 6px;
+      transition: all 0.2s;
+    }
+    .input-field:focus, .select-field:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      background: rgba(255,255,255,0.07);
+    }
+    .form-row {
+      margin-bottom: 16px;
+    }
+    .form-row label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .custom-pii-list, .whitelist-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0,0,0,0.2);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      border: 1px solid rgba(255,255,255,0.02);
+    }
+    .item-row span {
+      font-family: monospace;
+      color: var(--text-secondary);
+    }
+    .item-row strong {
+      color: #fff;
+      font-family: var(--font-family);
+    }
+    .badge-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-left: 8px;
+      text-transform: uppercase;
+    }
+    .badge-tag.warning {
+      background-color: var(--color-warning-light);
+      color: var(--color-warning);
+    }
+    .badge-tag.critical {
+      background-color: var(--color-critical-light);
+      color: var(--color-critical);
+    }
+    .action-btn {
+      background: var(--color-accent);
+      border: none;
+      color: #fff;
+      font-family: var(--font-family);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .action-btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+    .action-btn.secondary {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--card-border);
+    }
+    .action-btn.secondary:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    .action-btn.danger {
+      background: var(--color-critical-light);
+      color: var(--color-critical);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .action-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+    .flex-group {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .success-alert {
+      background-color: var(--color-safe-light);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: var(--color-safe);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      display: none;
+      animation: osn-guard-fade-in 0.3s;
+    }
+    .stats-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .stats-mini-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+    }
+    .stats-mini-val {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .stats-mini-lbl {
+      font-size: 10px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="options-wrapper">
+    <div class="options-header">
+      <div class="options-title">
+        <h1>🛡️ OSN Guard Configuration</h1>
+        <p>Manage protection features, PII patterns, and scan settings</p>
+      </div>
+      <button id="close-options-btn" class="action-btn secondary">Done</button>
+    </div>
+
+    <div id="save-success" class="success-alert">
+      ✓ Settings updated successfully.
+    </div>
+
+    <div class="settings-grid">
+      <!-- Custom PII Patterns -->
+      <section class="settings-group">
+        <h3><span>📝</span> Custom PII Scanning Rules</h3>
+        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+          Add regular expressions to monitor input fields for custom sensitive patterns (e.g. employee IDs, ticket formats, account numbers).
+        </p>
+        
+        <div class="flex-group">
+          <div class="form-row" style="flex: 2; margin-bottom: 0;">
+            <label for="new-pii-name">Rule Name</label>
+            <input type="text" id="new-pii-name" class="input-field" placeholder="e.g. Employee ID">
+          </div>
+          <div class="form-row" style="flex: 3; margin-bottom: 0;">
+            <label for="new-pii-pattern">Regex Pattern</label>
+            <input type="text" id="new-pii-pattern" class="input-field" placeholder="e.g. \bEMP-\d{5}\b">
+          </div>
+          <div class="form-row" style="flex: 1.5; margin-bottom: 0;">
+            <label for="new-pii-severity">Severity</label>
+            <select id="new-pii-severity" class="select-field">
+              <option value="warning">Warning</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+          <button id="add-pii-btn" class="action-btn" style="height: 38px;">Add</button>
+        </div>
+
+        <div class="custom-pii-list" id="pii-rules-container">
+          <!-- Populated from JS -->
+        </div>
+      </section>
+
+      <!-- Whitelist Domain Management -->
+      <section class="settings-group">
+        <h3><span>🌐</span> Whitelisted Domains</h3>
+        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+          Domains listed here will bypass all reputations, link scans, and PII checks. Wildcards (e.g. <code>*.intranet.local</code>) supported.
+        </p>
+
+        <div class="flex-group">
+          <div class="form-row" style="flex: 1; margin-bottom: 0;">
+            <label for="new-whitelist-domain">Add Domain</label>
+            <input type="text" id="new-whitelist-domain" class="input-field" placeholder="e.g. safe-intranet.local or *.company.com">
+          </div>
+          <button id="add-whitelist-btn" class="action-btn" style="height: 38px;">Whitelist</button>
+        </div>
+
+        <div class="whitelist-list" id="whitelist-container">
+          <!-- Populated from JS -->
+        </div>
+      </section>
+
+      <!-- Stats and Data Options -->
+      <section class="settings-group">
+        <h3><span>📊</span> Data & Statistics Control</h3>
+        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+          Live metrics collected by your OSN Guard local client. All data stays strictly on your device.
+        </p>
+
+        <div class="stats-summary-grid">
+          <div class="stats-mini-card">
+            <div class="stats-mini-val" id="opt-stat-links">0</div>
+            <div class="stats-mini-lbl">Links Checked</div>
+          </div>
+          <div class="stats-mini-card">
+            <div class="stats-mini-val" id="opt-stat-pii">0</div>
+            <div class="stats-mini-lbl">PII Blocked</div>
+          </div>
+          <div class="stats-mini-card">
+            <div class="stats-mini-val" id="opt-stat-threats">0</div>
+            <div class="stats-mini-lbl">Threats Found</div>
+          </div>
+          <div class="stats-mini-card">
+            <div class="stats-mini-val" id="opt-stat-sites">0</div>
+            <div class="stats-mini-lbl">Sites Protected</div>
+          </div>
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+          <button id="reset-stats-btn" class="action-btn danger">Reset Metrics Counter</button>
+          <button id="factory-reset-btn" class="action-btn danger">Restore Factory Defaults</button>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script src="../core/url-analyzer.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

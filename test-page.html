@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSN Guard Test Sandbox</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #f0f2f5;
+      color: #1c1e21;
+      padding: 40px 20px;
+      max-width: 840px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #65676b;
+      margin-bottom: 30px;
+    }
+    .sandbox-container {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+      padding: 24px;
+    }
+    .card h2 {
+      font-size: 18px;
+      margin-top: 0;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #e4e6eb;
+      padding-bottom: 8px;
+      color: #1877f2;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .post-composer textarea {
+      width: 100%;
+      height: 110px;
+      border: 1px solid #ccd0d5;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    .post-composer textarea:focus {
+      outline: none;
+      border-color: #1877f2;
+    }
+    .btn {
+      background-color: #1877f2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover {
+      background-color: #1565c0;
+    }
+    .feed-item {
+      border: 1px solid #e4e6eb;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: #fafbfa;
+    }
+    .feed-author {
+      font-weight: bold;
+      margin-bottom: 6px;
+      color: #333;
+    }
+    .feed-text {
+      font-size: 14px;
+      line-height: 1.4;
+      margin-bottom: 4px;
+      color: #4b5563;
+    }
+    .link-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .link-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+    .link-label {
+      font-size: 12px;
+      font-weight: 600;
+      min-width: 190px;
+      color: #64748b;
+    }
+    .link-item a {
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .link-item a:hover {
+      text-decoration: underline;
+    }
+    .instructions {
+      background: #e8f0fe;
+      border-left: 4px solid #1877f2;
+      padding: 16px;
+      border-radius: 6px;
+      margin-bottom: 24px;
+    }
+    .instructions ol {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+    .instructions li {
+      margin-bottom: 6px;
+    }
+    .sample-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .chip {
+      background: #e2e8f0;
+      border-radius: 16px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s;
+    }
+    .chip:hover {
+      background: #cbd5e1;
+      transform: translateY(-1px);
+    }
+    .form-test-box {
+      border: 1px dashed #cbd5e1;
+      padding: 16px;
+      border-radius: 8px;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <h1>🛡️ OSN Guard Test Sandbox</h1>
+  <p class="subtitle">Interactive sandbox to test unpacked OSN Guard extension features</p>
+
+  <div class="instructions">
+    <strong>How to Test OSN Guard:</strong>
+    <ol>
+      <li>Load the extension in Chrome (<code>chrome://extensions</code> -> Developer Mode -> Load unpacked -> select <code>osn-safety-scanner</code>).</li>
+      <li>Click any sample chips below or type sensitive data into the composer to test real-time PII interception.</li>
+      <li>Hover over the warning markers next to suspicious links and feeds to inspect the floating warning tooltips.</li>
+      <li>Open the OSN Guard toolbar icon to view the real-time security dashboard score and toggle shields.</li>
+    </ol>
+  </div>
+
+  <div class="sandbox-container">
+    <!-- 1. PII LEAK PROTECTION -->
+    <div class="card">
+      <h2><span>📧</span> 1. Test PII Leak Protection</h2>
+      <p style="font-size:13px; color:#65676b; margin-top:0;">
+        Click any quick sample below to populate the field, or type custom sensitive information:
+      </p>
+
+      <div class="sample-chips">
+        <span class="chip" onclick="pasteSample('Email', 'Please reach out at alice.smith@enterprise.org for questions.')">Email Sample</span>
+        <span class="chip" onclick="pasteSample('Credit Card', 'Payment card details: 4111 1111 1111 1111 exp 12/28')">Valid Luhn Card</span>
+        <span class="chip" onclick="pasteSample('SSN', 'My SSN is 123-45-6789 on the document.')">US SSN</span>
+        <span class="chip" onclick="pasteSample('API Token', 'OpenAI secret token: sk-9876543210abcdef9876543210abcdef')">API Secret Key</span>
+        <span class="chip" onclick="pasteSample('Phone', 'Call my cell at +1 (555) 234-5678')">Phone Number</span>
+      </div>
+
+      <div class="post-composer">
+        <textarea id="composer" placeholder="What's on your mind? (Type or click a sample chip above to test PII warnings)"></textarea>
+        <button class="btn" onclick="alert('Post submitted simulation')">Share Post</button>
+      </div>
+    </div>
+
+    <!-- 2. LINK REPUTATION SCANNER -->
+    <div class="card">
+      <h2><span>🔗</span> 2. Test Link Reputation Scanner</h2>
+      <p style="font-size:13px; color:#65676b; margin-top:0;">
+        OSN Guard scans links across domains, protocol types, known malicious databases, and homograph punycode spoofing:
+      </p>
+      <div class="link-list">
+        <div class="link-item">
+          <span class="link-label">Trusted Major Domain:</span>
+          <a href="https://www.google.com" target="_blank">Search on Google</a>
+        </div>
+        <div class="link-item">
+          <span class="link-label">Trusted Developer Portal:</span>
+          <a href="https://github.com" target="_blank">Explore GitHub</a>
+        </div>
+        <div class="link-item">
+          <span class="link-label">Known Phishing Domain:</span>
+          <a href="http://login-verify-facebook.com/signin" target="_blank">Verify Facebook Account</a>
+        </div>
+        <div class="link-item">
+          <span class="link-label">Punycode / IDN Spoofing:</span>
+          <a href="https://xn--pypal-4ve.com/signin" target="_blank">Secure PayPal Login</a>
+        </div>
+        <div class="link-item">
+          <span class="link-label">Suspicious Low-Cost TLD:</span>
+          <a href="http://free-coins-giveaway.xyz" target="_blank">Claim Free Coins ($XYZ)</a>
+        </div>
+        <div class="link-item">
+          <span class="link-label">Raw IP Address Target:</span>
+          <a href="http://192.168.1.100/config" target="_blank">Router Admin Portal</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. SCAM & SPAM CONTENT FILTER -->
+    <div class="card">
+      <h2><span>💬</span> 3. Test Scam & Fraud Content Filter</h2>
+      <p style="font-size:13px; color:#65676b; margin-top:0;">
+        Simulates social media feed posts containing scams, crypto drainers, urgent credential phishes, and employment spam:
+      </p>
+
+      <div class="feed-item">
+        <div class="feed-author">Alice Miller (Benign Safe Post)</div>
+        <div class="feed-text">Just finished reading a fantastic book on privacy-preserving machine learning. Highly recommend it to everyone!</div>
+      </div>
+
+      <div class="feed-item">
+        <div class="feed-author">CryptoAirdropNow (Crypto Giveaway Fraud)</div>
+        <div class="feed-text">🔥 EXCLUSIVE! Get free crypto right now! Guaranteed returns up to 10x! Double your bitcoin instantly. Send ETH to our wallet to claim bonus.</div>
+      </div>
+
+      <div class="feed-item">
+        <div class="feed-author">SupportHelper (Wallet Drainer / Seed Phrase Theft)</div>
+        <div class="feed-text">Wallet error detected during transaction sync. Enter seed phrase immediately in our verification tool to unlock your frozen assets.</div>
+      </div>
+
+      <div class="feed-item">
+        <div class="feed-author">AccountSecurity (Urgent Suspension Phishing)</div>
+        <div class="feed-text">Urgent action required! Reset credentials now due to unusual activity detected on your profile. Log in within 24 hours to prevent account suspension.</div>
+      </div>
+
+      <div class="feed-item">
+        <div class="feed-author">TechCare Helpline (Fake Tech Support Scam)</div>
+        <div class="feed-text">Critical system alert! Call Microsoft support toll-free at 1-800-555-0199 to remove detected spyware from your browser immediately.</div>
+      </div>
+
+      <div class="feed-item">
+        <div class="feed-author">Online Recruiter (Work-from-Home Spam)</div>
+        <div class="feed-text">Earn $500/day working from home scam-free! Contact our WhatsApp or join our telegram channel now to begin daily tasks.</div>
+      </div>
+    </div>
+
+    <!-- 4. INSECURE FORM SUBMISSION -->
+    <div class="card">
+      <h2><span>🔒</span> 4. Test Insecure Form Action Warning</h2>
+      <p style="font-size:13px; color:#65676b; margin-top:0;">
+        Forms submitting data to unencrypted HTTP endpoints on secure websites will trigger an insecure submission warning:
+      </p>
+      <div class="form-test-box">
+        <form id="insecure-test-form" action="http://insecure-api-demo.com/submit-credentials" method="POST">
+          <label style="font-size:12px; font-weight:bold;">Test Form (Action: http://insecure-api-demo.com)</label>
+          <div style="margin-top:8px; display:flex; gap:8px;">
+            <input type="text" placeholder="Username" style="padding:6px 10px; border:1px solid #ccd0d5; border-radius:4px; font-size:13px;">
+            <button type="button" class="btn" style="padding:6px 12px; font-size:13px;" onclick="alert('Submission simulated')">Submit Form</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function pasteSample(type, sampleText) {
+      const composer = document.getElementById("composer");
+      composer.value = sampleText;
+      // Dispatch input event to trigger OSN Guard scanner
+      composer.dispatchEvent(new Event("input", { bubbles: true }));
+      composer.focus();
+    }
+  </script>
+</body>
+</html>

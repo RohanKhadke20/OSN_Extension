@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "OSN Guard - Safety & Privacy Shield",
+  "version": "1.1.0",
+  "description": "Protects your privacy and safety on social networks by scanning for PII leaks, phishing links, scams, and insecure configurations.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "core/url-analyzer.js",
+        "core/pii-analyzer.js",
+        "core/scam-analyzer.js",
+        "content.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "OSN Guard"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  }
+}

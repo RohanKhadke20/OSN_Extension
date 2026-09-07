@@ -96,11 +96,35 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  // Check if current tab is a browser internal URL where extensions cannot run
+  const isInternalUrl = (urlString) => {
+    if (!urlString) return false;
+    const lower = urlString.toLowerCase();
+    return (
+      lower.startsWith("chrome://") ||
+      lower.startsWith("chrome-extension://") ||
+      lower.startsWith("edge://") ||
+      lower.startsWith("about:") ||
+      lower.startsWith("view-source:")
+    );
+  };
+
   // Retrieve current active tab and scan result list
   const updateSafetyStatus = () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (!tabs || tabs.length === 0) return;
       currentActiveTab = tabs[0];
+
+      if (isInternalUrl(currentActiveTab.url)) {
+        renderInternalState();
+        animateScoreValue(100);
+        setRingOffset(100);
+        statusText.textContent = "System Page";
+        statusText.style.color = "var(--text-secondary)";
+        statusDesc.textContent = "Browser policy prevents script scanning on internal tabs.";
+        progressRing.style.stroke = "var(--text-muted)";
+        return;
+      }
 
       if (isUrlWhitelisted(currentActiveTab.url)) {
         renderWhitelistedState();
@@ -199,6 +223,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const p = document.createElement("p");
     p.textContent = "Domain is whitelisted. Shields bypassed.";
+
+    empty.append(check, p);
+    threatsContainer.appendChild(empty);
+  };
+
+  const renderInternalState = () => {
+    threatsContainer.replaceChildren();
+
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+
+    const check = document.createElement("div");
+    check.className = "success-check";
+    check.textContent = "ℹ️";
+
+    const p = document.createElement("p");
+    p.textContent = "Browser system page. Scanner is inactive here.";
 
     empty.append(check, p);
     threatsContainer.appendChild(empty);

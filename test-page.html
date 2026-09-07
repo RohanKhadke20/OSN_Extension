@@ -186,8 +186,11 @@
       <div class="sample-chips">
         <span class="chip" onclick="pasteSample('Email', 'Please reach out at alice.smith@enterprise.org for questions.')">Email Sample</span>
         <span class="chip" onclick="pasteSample('Credit Card', 'Payment card details: 4111 1111 1111 1111 exp 12/28')">Valid Luhn Card</span>
-        <span class="chip" onclick="pasteSample('SSN', 'My SSN is 123-45-6789 on the document.')">US SSN</span>
+        <span class="chip" onclick="pasteSample('IBAN', 'Wire payment directly to my IBAN: DE89 3704 0044 0532 0130 00 today.')">German IBAN</span>
+        <span class="chip" onclick="pasteSample('SSN', 'My SSN is 123-45-6789 on the document.')">US SSN (Dashed)</span>
+        <span class="chip" onclick="pasteSample('SSN-Spaced', 'Applicant social number: 123 45 6789')">US SSN (Spaced)</span>
         <span class="chip" onclick="pasteSample('API Token', 'OpenAI secret token: sk-9876543210abcdef9876543210abcdef')">API Secret Key</span>
+        <span class="chip" onclick="pasteSample('GitHub PAT', 'GitHub token: github_pat_11ABCD1234567890abcdefghijklmnopqrstuvwxyz_01234567890abcdefghijklmnopqrstuv')">GitHub PAT</span>
         <span class="chip" onclick="pasteSample('Phone', 'Call my cell at +1 (555) 234-5678')">Phone Number</span>
       </div>
 
@@ -217,15 +220,27 @@
           <a href="http://login-verify-facebook.com/signin" target="_blank">Verify Facebook Account</a>
         </div>
         <div class="link-item">
+          <span class="link-label">Authority Userinfo Spoofing:</span>
+          <a href="https://google.com@phishing-target.com/login" target="_blank">Google Sign-in Link (Spoofed)</a>
+        </div>
+        <div class="link-item">
           <span class="link-label">Punycode / IDN Spoofing:</span>
           <a href="https://xn--pypal-4ve.com/signin" target="_blank">Secure PayPal Login</a>
         </div>
         <div class="link-item">
           <span class="link-label">Suspicious Low-Cost TLD:</span>
-          <a href="http://free-coins-giveaway.xyz" target="_blank">Claim Free Coins ($XYZ)</a>
+          <a href="http://crypto-claim.sbs" target="_blank">Claim Free Coins (.SBS)</a>
         </div>
         <div class="link-item">
-          <span class="link-label">Raw IP Address Target:</span>
+          <span class="link-label">Open Redirect Parameter:</span>
+          <a href="https://external-service.org/login?redirect=https://evil-harvest.com" target="_blank">Open Redirect Target</a>
+        </div>
+        <div class="link-item">
+          <span class="link-label">IPv6 Hostname Target:</span>
+          <a href="http://[::1]/config" target="_blank">IPv6 Router Admin Portal</a>
+        </div>
+        <div class="link-item">
+          <span class="link-label">Raw IPv4 Target:</span>
           <a href="http://192.168.1.100/config" target="_blank">Router Admin Portal</a>
         </div>
       </div>
@@ -235,7 +250,7 @@
     <div class="card">
       <h2><span>💬</span> 3. Test Scam & Fraud Content Filter</h2>
       <p style="font-size:13px; color:#65676b; margin-top:0;">
-        Simulates social media feed posts containing scams, crypto drainers, urgent credential phishes, and employment spam:
+        Simulates social media feed posts containing scams, crypto drainers, urgent credential phishes, quishing, and employment spam:
       </p>
 
       <div class="feed-item">
@@ -256,6 +271,21 @@
       <div class="feed-item">
         <div class="feed-author">AccountSecurity (Urgent Suspension Phishing)</div>
         <div class="feed-text">Urgent action required! Reset credentials now due to unusual activity detected on your profile. Log in within 24 hours to prevent account suspension.</div>
+      </div>
+
+      <div class="feed-item">
+        <div class="feed-author">SecurityNotice (Quishing / QR Code Lure)</div>
+        <div class="feed-text">Important update: Scan QR code to verify your profile immediately to avoid account suspension and unlock transactions.</div>
+      </div>
+
+      <div class="feed-item">
+        <div class="feed-author">NFTLaunch (NFT Drainer / Stealth Mint)</div>
+        <div class="feed-text">Surprise drop: Free mint is live right now! Mint your free NFT before allocation expires on our verified portal.</div>
+      </div>
+
+      <div class="feed-item">
+        <div class="feed-author">AIBotTrading (AI Token / Yield Scam)</div>
+        <div class="feed-text">Claim free AI tokens with our AI arbitrage bot guaranteed 50% weekly return! Join daily passive crypto yield today.</div>
       </div>
 
       <div class="feed-item">

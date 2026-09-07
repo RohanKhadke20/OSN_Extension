@@ -100,6 +100,38 @@ describe("Scam & Fraud Content Detector", () => {
     assert.equal(res.flagged, true);
     assert.equal(res.severity, "critical", "Expected critical threat to take precedence over warning");
     assert.equal(res.id, "seed-phrase-theft");
+    assert.equal(Array.isArray(res.allMatches), true);
+    assert.equal(res.allMatches.length >= 2, true);
+  });
+
+  it("detects urgent package and delivery phishing lures", () => {
+    const deliveryTexts = [
+      "Alert: Package delivery failed due to incorrect zip code. Update delivery address now.",
+      "Your parcel pending delivery requires a reschedule delivery fee of $1.50 to clear.",
+      "Customs fee unpaid on foreign parcel. Shipment held at depot."
+    ];
+
+    for (const text of deliveryTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected flagged for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "package-phish");
+    }
+  });
+
+  it("detects online task and fake review advance payment scams", () => {
+    const taskTexts = [
+      "Easy remote work: Earn commission for rating merchant products daily from home.",
+      "Complete daily tasks to earn $200-$500 per day! Paid per video review with instant withdrawal.",
+      "App review job daily pay guaranteed. Recharge wallet to unlock commission tier 2."
+    ];
+
+    for (const text of taskTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected flagged for: ${text}`);
+      assert.equal(res.severity, "warning");
+      assert.equal(res.id, "task-investment-scam");
+    }
   });
 
   it("ignores benign regular social posts", () => {

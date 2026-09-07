@@ -154,6 +154,36 @@
         "guaranteed 50% weekly return"
       ],
       reason: "Deceptive AI investment scheme or unregulated yield multiplier."
+    },
+    {
+      id: "package-phish",
+      category: "Package Delivery Phishing",
+      severity: "critical",
+      keywords: [
+        "package delivery failed",
+        "parcel pending delivery",
+        "reschedule delivery fee",
+        "update delivery address",
+        "customs fee unpaid",
+        "shipment held at depot",
+        "usps delivery issue",
+        "redelivery scheduled fee"
+      ],
+      reason: "Urgent package or parcel delivery fee lure mimicking courier services."
+    },
+    {
+      id: "task-investment-scam",
+      category: "Online Task / Fake Review Scam",
+      severity: "warning",
+      keywords: [
+        "earn commission for rating",
+        "complete daily tasks to earn",
+        "paid per video review",
+        "daily task commission",
+        "app review job daily pay",
+        "recharge wallet to unlock commission"
+      ],
+      reason: "Suspected task-based advance payment scam or deceptive review syndicate."
     }
   ];
 
@@ -161,7 +191,7 @@
    * Analyzes text content for scam, fraud, or phishing indicators
    * Prioritizes critical severity matches over warnings when multiple indicators exist
    * @param {string} text - The post or message content
-   * @returns {{ flagged: boolean, id?: string, category?: string, reason?: string, severity?: "warning" | "critical", matchedKeyword?: string }}
+   * @returns {{ flagged: boolean, id?: string, category?: string, reason?: string, severity?: "warning" | "critical", matchedKeyword?: string, allMatches?: Array<object> }}
    */
   function detectScamContent(text) {
     if (!text || typeof text !== "string" || text.trim().length < 8) {
@@ -193,7 +223,10 @@
 
     // Always surface critical threats first
     const topThreat = matches.find(m => m.severity === "critical") || matches[0];
-    return topThreat;
+    return {
+      ...topThreat,
+      allMatches: matches
+    };
   }
 
   return {

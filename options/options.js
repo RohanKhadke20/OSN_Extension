@@ -19,6 +19,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const addWhitelistBtn = document.getElementById("add-whitelist-btn");
   const whitelistContainer = document.getElementById("whitelist-container");
 
+  // Backup & Portability Elements
+  const exportConfigBtn = document.getElementById("export-config-btn");
+  const importConfigFile = document.getElementById("import-config-file");
+
   // Stats Elements
   const optStatLinks = document.getElementById("opt-stat-links");
   const optStatPii = document.getElementById("opt-stat-pii");
@@ -234,13 +238,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Add Domain to Whitelist
   addWhitelistBtn.addEventListener("click", () => {
-    let rawInput = newWhitelistDomain.value.trim().toLowerCase();
+    const rawInput = newWhitelistDomain.value.trim().toLowerCase().replace(/\.+$/, "");
     if (!rawInput) return;
 
     let cleanDomain = rawInput;
 
     // Handle wildcard domains like *.example.com
-    const isWildcard = cleanDomain.startsWith("*.");
+    let isWildcard = cleanDomain.startsWith("*.");
     if (isWildcard) {
       cleanDomain = cleanDomain.substring(2);
     }
@@ -255,12 +259,18 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+    // Re-check wildcard if entered as https://*.example.com
+    if (cleanDomain.startsWith("*.")) {
+      isWildcard = true;
+      cleanDomain = cleanDomain.substring(2);
+    }
+
     if (cleanDomain.startsWith("www.")) {
       cleanDomain = cleanDomain.substring(4);
     }
 
-    // Strip trailing paths, ports, or queries
-    cleanDomain = cleanDomain.split("/")[0].split("?")[0].split(":")[0];
+    // Strip trailing paths, ports, queries, or dots
+    cleanDomain = cleanDomain.split("/")[0].split("?")[0].split(":")[0].replace(/\.+$/, "");
 
     // Basic domain validation
     if (!cleanDomain || cleanDomain.length < 3 || (!cleanDomain.includes(".") && cleanDomain !== "localhost")) {
@@ -281,6 +291,95 @@ document.addEventListener("DOMContentLoaded", () => {
       triggerErrorAlert("This domain is already on your whitelist.");
     }
   });
+
+  // Export Settings Backup
+  if (exportConfigBtn) {
+    exportConfigBtn.addEventListener("click", () => {
+      chrome.storage.local.get(["shields", "whitelistedDomains", "customPiiPatterns"], (data) => {
+        const backup = {
+          app: "OSN Guard",
+          version: "1.2.0",
+          exportedAt: new Date().toISOString(),
+          shields: data.shields || { pii: true, url: true, content: true, security: true },
+          whitelistedDomains: data.whitelistedDomains || [],
+          customPiiPatterns: data.customPiiPatterns || []
+        };
+
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `osn-guard-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        triggerSuccessAlert("Configuration backup exported.");
+      });
+    });
+  }
+
+  // Import Settings Backup
+  if (importConfigFile) {
+    importConfigFile.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const parsed = JSON.parse(event.target.result);
+          if (!parsed || typeof parsed !== "object") {
+            throw new Error("File does not contain a valid JSON object.");
+          }
+
+          const updates = {};
+
+          if (parsed.shields && typeof parsed.shields === "object") {
+            updates.shields = {
+              pii: parsed.shields.pii !== false,
+              url: parsed.shields.url !== false,
+              content: parsed.shields.content !== false,
+              security: parsed.shields.security !== false
+            };
+          }
+
+          if (Array.isArray(parsed.whitelistedDomains)) {
+            updates.whitelistedDomains = parsed.whitelistedDomains
+              .filter(d => typeof d === "string" && d.trim().length > 0)
+              .map(d => d.trim().toLowerCase().replace(/\.+$/, ""));
+          }
+
+          if (Array.isArray(parsed.customPiiPatterns)) {
+            updates.customPiiPatterns = parsed.customPiiPatterns.filter(p => {
+              if (!p || !p.pattern || typeof p.pattern !== "string") return false;
+              try {
+                new RegExp(p.pattern, "g");
+                return true;
+              } catch {
+                return false;
+              }
+            });
+          }
+
+          if (Object.keys(updates).length === 0) {
+            triggerErrorAlert("No recognized settings found in imported file.");
+            return;
+          }
+
+          chrome.storage.local.set(updates, () => {
+            loadConfig();
+            triggerSuccessAlert("Configuration imported successfully!");
+            importConfigFile.value = "";
+          });
+        } catch (err) {
+          triggerErrorAlert(`Failed to import configuration: ${err.message}`);
+          importConfigFile.value = "";
+        }
+      };
+      reader.readAsText(file);
+    });
+  }
 
   // Reset Stats Counter
   resetStatsBtn.addEventListener("click", () => {

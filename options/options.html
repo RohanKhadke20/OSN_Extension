@@ -284,6 +284,21 @@
         </div>
       </section>
 
+      <!-- Backup & Portability -->
+      <section class="settings-group">
+        <h3><span>💾</span> Backup & Portability</h3>
+        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+          Export your custom PII rules, whitelist settings, and shield configurations as a JSON file to transfer between devices.
+        </p>
+        <div style="display:flex; gap:12px; align-items:center;">
+          <button id="export-config-btn" class="action-btn secondary">Export Configuration</button>
+          <label for="import-config-file" class="action-btn secondary" style="cursor:pointer; margin:0;">
+            Import Configuration
+          </label>
+          <input type="file" id="import-config-file" accept=".json" style="display:none;">
+        </div>
+      </section>
+
       <!-- Stats and Data Options -->
       <section class="settings-group">
         <h3><span>📊</span> Data & Statistics Control</h3>

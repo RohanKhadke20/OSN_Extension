@@ -108,4 +108,76 @@ describe("Storage & Integration Helpers", () => {
       assert.equal(stats.sitesProtected, 3); // Untouched because siteProtected was false
     });
   });
+
+  describe("Configuration Backup & Sanitization", () => {
+    function sanitizeDomainInput(input) {
+      const rawInput = (input || "").trim().toLowerCase().replace(/\.+$/, "");
+      if (!rawInput) return null;
+
+      let cleanDomain = rawInput;
+      let isWildcard = cleanDomain.startsWith("*.");
+      if (isWildcard) cleanDomain = cleanDomain.substring(2);
+
+      if (cleanDomain.startsWith("http://") || cleanDomain.startsWith("https://")) {
+        try {
+          cleanDomain = new URL(cleanDomain).hostname;
+        } catch {
+          cleanDomain = cleanDomain.replace(/^https?:\/\//, "").split("/")[0];
+        }
+      }
+
+      if (cleanDomain.startsWith("*.")) {
+        isWildcard = true;
+        cleanDomain = cleanDomain.substring(2);
+      }
+
+      if (cleanDomain.startsWith("www.")) cleanDomain = cleanDomain.substring(4);
+      cleanDomain = cleanDomain.split("/")[0].split("?")[0].split(":")[0].replace(/\.+$/, "");
+
+      if (!cleanDomain || cleanDomain.length < 3 || (!cleanDomain.includes(".") && cleanDomain !== "localhost")) {
+        return null;
+      }
+
+      return isWildcard ? `*.${cleanDomain}` : cleanDomain;
+    }
+
+    it("sanitizes domain inputs across various formats", () => {
+      assert.equal(sanitizeDomainInput("https://*.internal.org/dashboard"), "*.internal.org");
+      assert.equal(sanitizeDomainInput("HTTP://WWW.EXAMPLE.COM:8080/"), "example.com");
+      assert.equal(sanitizeDomainInput("corp.local."), "corp.local");
+      assert.equal(sanitizeDomainInput("localhost"), "localhost");
+      assert.equal(sanitizeDomainInput("invalid"), null);
+      assert.equal(sanitizeDomainInput(""), null);
+    });
+
+    it("validates and filters imported backup payloads correctly", () => {
+      const sampleBackup = {
+        shields: { pii: true, url: false, content: true, security: true },
+        whitelistedDomains: ["EXAMPLE.COM.", "*.PARTNER.NET"],
+        customPiiPatterns: [
+          { name: "Valid Rule", pattern: "CODE-[0-9]{4}" },
+          { name: "Bad Regex", pattern: "([a-z" }
+        ]
+      };
+
+      const sanitizedDomains = sampleBackup.whitelistedDomains
+        .filter(d => typeof d === "string" && d.trim().length > 0)
+        .map(d => d.trim().toLowerCase().replace(/\.+$/, ""));
+
+      assert.deepEqual(sanitizedDomains, ["example.com", "*.partner.net"]);
+
+      const validRules = sampleBackup.customPiiPatterns.filter(p => {
+        if (!p || !p.pattern) return false;
+        try {
+          new RegExp(p.pattern, "g");
+          return true;
+        } catch {
+          return false;
+        }
+      });
+
+      assert.equal(validRules.length, 1);
+      assert.equal(validRules[0].name, "Valid Rule");
+    });
+  });
 });

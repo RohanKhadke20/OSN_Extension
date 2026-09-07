@@ -217,8 +217,10 @@
   }
 
   /**
-   * Checks if a domain is included in the whitelist
-   * @param {string} hostname - Target hostname
+   * Checks if a domain or host is included in the whitelist
+   * Supports standard domains, subdomains, wildcards (*.domain), ports (localhost:3000),
+   * and private IP subnet prefixes (192.168.*, 10.*)
+   * @param {string} hostname - Target hostname or host:port
    * @param {Array<string>} whitelistedDomains - List of whitelisted domain names
    * @returns {boolean}
    */
@@ -228,36 +230,58 @@
     }
 
     const cleanHost = hostname.toLowerCase().trim().replace(/\.+$/, "");
+    const hostParts = cleanHost.split(":");
+    const hostOnly = hostParts[0];
+    const hostPort = hostParts[1] || "";
+    const hostWithoutWww = hostOnly.startsWith("www.") ? hostOnly.slice(4) : hostOnly;
 
     return whitelistedDomains.some(entry => {
       if (!entry) return false;
       let cleanEntry = entry.toLowerCase().trim().replace(/\.+$/, "");
-      
+
       // Strip scheme if present
       if (cleanEntry.startsWith("http://") || cleanEntry.startsWith("https://")) {
         try {
-          cleanEntry = new URL(cleanEntry).hostname.replace(/\.+$/, "");
+          const parsed = new URL(cleanEntry);
+          cleanEntry = parsed.host || parsed.hostname;
         } catch {
           cleanEntry = cleanEntry.replace(/^https?:\/\//, "").replace(/\.+$/, "");
         }
       }
 
+      // Check subnet wildcard prefix (e.g. 192.168.*, 10.*)
+      if (cleanEntry.endsWith(".*")) {
+        const prefix = cleanEntry.slice(0, -1);
+        if (hostOnly.startsWith(prefix)) {
+          return true;
+        }
+      }
+
+      // Parse entry port if specified
+      const entryParts = cleanEntry.split(":");
+      let entryHost = entryParts[0];
+      const entryPort = entryParts[1] || "";
+
       // Remove wildcard prefix (*.example.com -> example.com)
-      if (cleanEntry.startsWith("*.")) {
-        cleanEntry = cleanEntry.slice(2);
+      if (entryHost.startsWith("*.")) {
+        entryHost = entryHost.slice(2);
       }
 
       // Strip leading www. if needed
-      if (cleanEntry.startsWith("www.")) {
-        cleanEntry = cleanEntry.slice(4);
+      if (entryHost.startsWith("www.")) {
+        entryHost = entryHost.slice(4);
       }
 
-      const hostWithoutWww = cleanHost.startsWith("www.") ? cleanHost.slice(4) : cleanHost;
+      // Host matching check
+      const hostMatches = hostWithoutWww === entryHost || hostWithoutWww.endsWith("." + entryHost);
+      if (!hostMatches) return false;
 
-      return (
-        hostWithoutWww === cleanEntry ||
-        hostWithoutWww.endsWith("." + cleanEntry)
-      );
+      // Port matching check
+      if (entryPort) {
+        return hostPort === entryPort;
+      }
+
+      return true;
     });
   }
 
@@ -377,9 +401,10 @@
     }
 
     const domain = urlObj.hostname.toLowerCase().replace(/\.+$/, "");
+    const hostWithPort = urlObj.host ? urlObj.host.toLowerCase().replace(/\.+$/, "") : domain;
 
     // Check 1: User Whitelist
-    if (isDomainWhitelisted(domain, whitelistedDomains)) {
+    if (isDomainWhitelisted(hostWithPort, whitelistedDomains) || isDomainWhitelisted(domain, whitelistedDomains)) {
       return { safe: true, reason: "Domain is in user whitelist" };
     }
 

@@ -156,6 +156,47 @@ describe("URL Safety Analyzer", () => {
     assert.equal(res4.safe, false);
   });
 
+  it("supports developer ports and private intranet subnet wildcards in whitelist", () => {
+    const devWhitelist = [
+      "localhost:3000",
+      "127.0.0.1:8080",
+      "192.168.*",
+      "10.*",
+      "*.internal.corp:5173"
+    ];
+
+    // Exact host and port matches
+    assert.equal(isDomainWhitelisted("localhost:3000", devWhitelist), true);
+    assert.equal(isDomainWhitelisted("127.0.0.1:8080", devWhitelist), true);
+
+    // Different port on same host does not match port-specific entry
+    assert.equal(isDomainWhitelisted("localhost:9000", devWhitelist), false);
+    assert.equal(isDomainWhitelisted("127.0.0.1:3000", devWhitelist), false);
+
+    // Private subnet prefixes match any IP within that range
+    assert.equal(isDomainWhitelisted("192.168.1.1", devWhitelist), true);
+    assert.equal(isDomainWhitelisted("192.168.0.254:8000", devWhitelist), true);
+    assert.equal(isDomainWhitelisted("10.0.0.15", devWhitelist), true);
+    assert.equal(isDomainWhitelisted("10.255.4.1:443", devWhitelist), true);
+
+    // Other private ranges not in whitelist do not match
+    assert.equal(isDomainWhitelisted("172.16.0.1", devWhitelist), false);
+    assert.equal(isDomainWhitelisted("8.8.8.8", devWhitelist), false);
+
+    // Wildcard subdomain with port
+    assert.equal(isDomainWhitelisted("dev.internal.corp:5173", devWhitelist), true);
+    assert.equal(isDomainWhitelisted("dev.internal.corp:3000", devWhitelist), false);
+
+    // End-to-end analyzeUrlSafety check with dev port
+    const urlCheck1 = analyzeUrlSafety("http://localhost:3000/api/status", devWhitelist);
+    assert.equal(urlCheck1.safe, true);
+    assert.match(urlCheck1.reason, /whitelist/i);
+
+    const subnetCheck = analyzeUrlSafety("http://192.168.1.55:8080/dashboard", devWhitelist);
+    assert.equal(subnetCheck.safe, true);
+    assert.match(subnetCheck.reason, /whitelist/i);
+  });
+
   it("handles malformed or internal URLs gracefully", () => {
     assert.equal(analyzeUrlSafety("javascript:void(0)").safe, true);
     assert.equal(analyzeUrlSafety("#top").safe, true);

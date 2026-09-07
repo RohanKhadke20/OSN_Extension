@@ -23,6 +23,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const exportConfigBtn = document.getElementById("export-config-btn");
   const importConfigFile = document.getElementById("import-config-file");
 
+  // Audit Log Elements
+  const auditLogContainer = document.getElementById("audit-log-container");
+  const exportAuditBtn = document.getElementById("export-audit-btn");
+  const clearAuditBtn = document.getElementById("clear-audit-btn");
+
   // Live PII Sandbox Elements
   const sandboxInput = document.getElementById("sandbox-input-text");
   const sandboxOutput = document.getElementById("sandbox-output-text");
@@ -41,6 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let localPiiRules = [];
   let localWhitelist = [];
+  let localAuditLog = [];
 
   // Helper to show success notice
   const triggerSuccessAlert = (message = "Settings updated successfully.") => {
@@ -79,9 +85,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Load and Render Option lists
   const loadConfig = () => {
-    chrome.storage.local.get(["customPiiPatterns", "whitelistedDomains", "stats"], (data) => {
+    chrome.storage.local.get(["customPiiPatterns", "whitelistedDomains", "stats", "auditLog"], (data) => {
       localPiiRules = Array.isArray(data.customPiiPatterns) ? data.customPiiPatterns : [];
       localWhitelist = Array.isArray(data.whitelistedDomains) ? data.whitelistedDomains : [];
+      localAuditLog = Array.isArray(data.auditLog) ? data.auditLog : [];
 
       // Ensure every rule has an ID
       localPiiRules.forEach((rule, idx) => {
@@ -93,6 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderPiiRules();
       renderWhitelist();
       renderStats(data.stats);
+      renderAuditLog(localAuditLog);
       updateSandbox();
     });
   };
@@ -515,6 +523,102 @@ document.addEventListener("DOMContentLoaded", () => {
   if (copySanitizedBtn && sandboxOutput) {
     copySanitizedBtn.addEventListener("click", () => {
       copyTextToClipboard(sandboxOutput.value, copySanitizedBtn);
+    });
+  }
+
+  // Render Security Incident Audit Log safely without innerHTML
+  const renderAuditLog = (auditEntries = []) => {
+    if (!auditLogContainer) return;
+    auditLogContainer.replaceChildren();
+
+    if (!Array.isArray(auditEntries) || auditEntries.length === 0) {
+      const emptyRow = document.createElement("div");
+      emptyRow.style.cssText = "color: var(--text-secondary); font-size: 12px; font-style: italic; padding: 12px; text-align: center; background: rgba(0,0,0,0.1); border-radius: 8px;";
+      emptyRow.textContent = "No security threat incidents logged yet. Clean browser session.";
+      auditLogContainer.appendChild(emptyRow);
+      return;
+    }
+
+    auditEntries.forEach((entry) => {
+      const card = document.createElement("div");
+      card.className = "audit-entry";
+
+      const header = document.createElement("div");
+      header.className = "audit-entry-header";
+
+      const title = document.createElement("div");
+      title.className = "audit-entry-title";
+      const icon = document.createElement("span");
+      icon.textContent = entry.severity === "critical" ? "🔴" : "🟠";
+      const name = document.createElement("span");
+      name.textContent = entry.type || "Incident";
+      title.appendChild(icon);
+      title.appendChild(name);
+
+      const time = document.createElement("div");
+      time.className = "audit-entry-time";
+      let timeStr = "";
+      try {
+        timeStr = new Date(entry.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      } catch {
+        timeStr = entry.timestamp || "";
+      }
+      time.textContent = timeStr;
+
+      header.appendChild(title);
+      header.appendChild(time);
+
+      const msg = document.createElement("div");
+      msg.className = "audit-entry-msg";
+      msg.textContent = entry.message || "";
+
+      card.appendChild(header);
+      card.appendChild(msg);
+
+      if (entry.target || entry.domain) {
+        const target = document.createElement("div");
+        target.className = "audit-entry-target";
+        target.textContent = `Target: ${entry.target || entry.domain}`;
+        card.appendChild(target);
+      }
+
+      auditLogContainer.appendChild(card);
+    });
+  };
+
+  if (clearAuditBtn) {
+    clearAuditBtn.addEventListener("click", () => {
+      chrome.storage.local.set({ auditLog: [] }, () => {
+        localAuditLog = [];
+        renderAuditLog([]);
+        triggerSuccessAlert("Security audit log cleared.");
+      });
+    });
+  }
+
+  if (exportAuditBtn) {
+    exportAuditBtn.addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(localAuditLog, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `osn-guard-audit-log-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(url);
+      }, 100);
+    });
+  }
+
+  // Live storage synchronization
+  if (chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === "local" && changes.auditLog) {
+        localAuditLog = Array.isArray(changes.auditLog.newValue) ? changes.auditLog.newValue : [];
+        renderAuditLog(localAuditLog);
+      }
     });
   }
 

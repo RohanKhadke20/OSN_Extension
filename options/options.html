@@ -213,6 +213,44 @@
       text-transform: uppercase;
       margin-top: 2px;
     }
+    .audit-entry {
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+    }
+    .audit-entry-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .audit-entry-title {
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .audit-entry-time {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-family: monospace;
+    }
+    .audit-entry-msg {
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    .audit-entry-target {
+      font-family: monospace;
+      color: #94a3b8;
+      font-size: 11px;
+      word-break: break-all;
+    }
   </style>
 </head>
 <body>
@@ -319,6 +357,24 @@
             Import Configuration
           </label>
           <input type="file" id="import-config-file" accept=".json" style="display:none;">
+        </div>
+      </section>
+
+      <!-- Security Audit Event Log -->
+      <section class="settings-group">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="margin:0;"><span>🛡️</span> Security Incident & Audit Log</h3>
+          <div style="display:flex; gap:8px;">
+            <button id="export-audit-btn" class="action-btn secondary" style="padding:4px 10px; font-size:11px; height:28px;">Export JSON</button>
+            <button id="clear-audit-btn" class="action-btn danger" style="padding:4px 10px; font-size:11px; height:28px;">Clear Log</button>
+          </div>
+        </div>
+        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+          Rolling record of the last 50 threats intercepted by OSN Guard on this browser instance.
+        </p>
+
+        <div id="audit-log-container" class="audit-log-container" style="max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+          <!-- Populated from JS -->
         </div>
       </section>
 

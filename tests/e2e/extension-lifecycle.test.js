@@ -82,7 +82,10 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
           hasSandboxInput: Boolean(document.getElementById("sandbox-input-text")),
           hasSandboxOutput: Boolean(document.getElementById("sandbox-output-text")),
           hasCopySanitizedBtn: Boolean(document.getElementById("copy-sanitized-btn")),
-          hasSandboxFindings: Boolean(document.getElementById("sandbox-findings"))
+          hasSandboxFindings: Boolean(document.getElementById("sandbox-findings")),
+          hasAuditContainer: Boolean(document.getElementById("audit-log-container")),
+          hasExportAuditBtn: Boolean(document.getElementById("export-audit-btn")),
+          hasClearAuditBtn: Boolean(document.getElementById("clear-audit-btn"))
         };
       })()
     `);
@@ -100,6 +103,9 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
     assert.equal(pageData.hasSandboxOutput, true);
     assert.equal(pageData.hasCopySanitizedBtn, true);
     assert.equal(pageData.hasSandboxFindings, true);
+    assert.equal(pageData.hasAuditContainer, true);
+    assert.equal(pageData.hasExportAuditBtn, true);
+    assert.equal(pageData.hasClearAuditBtn, true);
 
     // Verify live PII sandbox sanitizes input text in real time
     const sanitizedOutput = await page.evaluate(`

@@ -58,6 +58,10 @@ chrome.runtime.onInstalled.addListener(() => {
       defaults.customPiiPatterns = [];
     }
 
+    if (!data.auditLog) {
+      defaults.auditLog = [];
+    }
+
     if (Object.keys(defaults).length > 0) {
       chrome.storage.local.set(defaults);
     }
@@ -65,6 +69,19 @@ chrome.runtime.onInstalled.addListener(() => {
 
   console.log("[OSN Guard] Service worker initialized and defaults ensured.");
 });
+
+// Rolling security audit log buffer limit
+const MAX_AUDIT_LOG_ENTRIES = 50;
+
+function appendAuditLog(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) return;
+
+  chrome.storage.local.get("auditLog", (data) => {
+    const existingLog = Array.isArray(data.auditLog) ? data.auditLog : [];
+    const updated = [...entries, ...existingLog].slice(0, MAX_AUDIT_LOG_ENTRIES);
+    chrome.storage.local.set({ auditLog: updated });
+  });
+}
 
 // Serialized promise queue to eliminate race conditions in stats updates
 let statsUpdateQueue = Promise.resolve();
@@ -127,6 +144,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (statsUpdate) {
         updateGlobalStats(statsUpdate);
       }
+
+      // Record new threats in audit event buffer
+      if (Array.isArray(threats) && threats.length > 0) {
+        const pageUrl = sender.tab.url || "";
+        let host = "";
+        try {
+          host = new URL(pageUrl).hostname;
+        } catch {
+          host = pageUrl;
+        }
+        const timestamp = new Date().toISOString();
+        const logEntries = threats.map(t => ({
+          id: t.id || ("evt-" + Math.random().toString(36).slice(2, 10)),
+          timestamp: timestamp,
+          type: t.type || "Threat Detected",
+          severity: t.severity || "warning",
+          message: t.message || "",
+          target: t.target || "",
+          domain: host
+        }));
+        appendAuditLog(logEntries);
+      }
+
       sendResponse({ status: "success" });
     });
 
@@ -232,6 +272,20 @@ if (typeof chrome !== "undefined" && chrome.contextMenus && chrome.contextMenus.
           result = OSNUrlAnalyzer.analyzeUrlSafety(info.linkUrl, whitelist);
         }
 
+        if (!result.safe) {
+          let host = "";
+          try { host = tab.url ? new URL(tab.url).hostname : ""; } catch { /* ignore */ }
+          appendAuditLog([{
+            id: "evt-" + Math.random().toString(36).slice(2, 10),
+            timestamp: new Date().toISOString(),
+            type: "Manual Link Scan",
+            severity: result.severity || "warning",
+            message: result.reason || "Suspicious link flagged via manual scan",
+            target: info.linkUrl,
+            domain: host
+          }]);
+        }
+
         chrome.tabs.sendMessage(tab.id, {
           action: "displayScanResult",
           targetType: "link",
@@ -255,6 +309,22 @@ if (typeof chrome !== "undefined" && chrome.contextMenus && chrome.contextMenus.
 
         if (typeof OSNPiiAnalyzer !== "undefined" && OSNPiiAnalyzer.detectPii) {
           piiResult = OSNPiiAnalyzer.detectPii(info.selectionText, customPatterns);
+        }
+
+        if (scamResult.flagged || piiResult.length > 0) {
+          let host = "";
+          try { host = tab.url ? new URL(tab.url).hostname : ""; } catch { /* ignore */ }
+          const type = scamResult.flagged ? (scamResult.category || "Scam Detected") : "PII Detected";
+          const severity = scamResult.severity || (piiResult[0] ? piiResult[0].severity : "warning");
+          appendAuditLog([{
+            id: "evt-" + Math.random().toString(36).slice(2, 10),
+            timestamp: new Date().toISOString(),
+            type: `Manual Scan: ${type}`,
+            severity: severity,
+            message: scamResult.flagged ? scamResult.reason : `Detected ${piiResult.length} sensitive items`,
+            target: info.selectionText.slice(0, 60),
+            domain: host
+          }]);
         }
 
         chrome.tabs.sendMessage(tab.id, {

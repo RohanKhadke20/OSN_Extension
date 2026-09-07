@@ -8,9 +8,41 @@
   let isScannerInitialized = false;
 
   const SCANNED_ATTR = "data-osn-scanned";
+  const MAX_CONTAINERS_PER_BATCH = 50;
+  const MAX_LINKS_PER_BATCH = 100;
+  let batchScheduleId = null;
+  let isBatchRunning = false;
+
   let pageThreats = [];
   let scanStats = { linksScanned: 0, threats: 0, siteProtected: false };
   let isInitialReportDone = false;
+
+  function cancelScheduledBatches() {
+    if (batchScheduleId !== null) {
+      if (typeof cancelIdleCallback === "function") {
+        cancelIdleCallback(batchScheduleId);
+      } else {
+        clearTimeout(batchScheduleId);
+      }
+      batchScheduleId = null;
+    }
+  }
+
+  function scheduleNextBatch() {
+    if (batchScheduleId !== null || isBatchRunning) return;
+
+    if (typeof requestIdleCallback === "function") {
+      batchScheduleId = requestIdleCallback(() => {
+        batchScheduleId = null;
+        scanPage();
+      }, { timeout: 500 });
+    } else {
+      batchScheduleId = setTimeout(() => {
+        batchScheduleId = null;
+        scanPage();
+      }, 80);
+    }
+  }
 
   // Active PII Alert Banners map: element -> { banner, lastPiiNames, lastSeverity }
   const activeAlertBanners = new Map();
@@ -124,6 +156,7 @@
   });
 
   function rescanPage() {
+    cancelScheduledBatches();
     clearAllBadgesAndAlerts();
     document.querySelectorAll(`[${SCANNED_ATTR}]`).forEach(el => el.removeAttribute(SCANNED_ATTR));
     document.querySelectorAll("[data-osn-badged]").forEach(el => el.removeAttribute("data-osn-badged"));
@@ -153,6 +186,7 @@
   }
 
   function clearAllBadgesAndAlerts() {
+    cancelScheduledBatches();
     clearAllPiiAlerts();
     clearAllUrlBadges();
     clearAllContentBadges();
@@ -192,6 +226,7 @@
       if (!isExternalMutation) return;
 
       clearTimeout(scanTimeout);
+      cancelScheduledBatches();
       scanTimeout = setTimeout(scanPage, 800);
     });
 
@@ -206,6 +241,10 @@
     // Keep PII alert banners aligned on scroll and window resize
     window.addEventListener("scroll", updateAllBannerPositions, { passive: true });
     window.addEventListener("resize", updateAllBannerPositions, { passive: true });
+
+    // Clean up timers on tab unload / navigation
+    window.addEventListener("pagehide", cancelScheduledBatches, { passive: true });
+    window.addEventListener("beforeunload", cancelScheduledBatches, { passive: true });
   }
 
   // Main Page Scanning Logic
@@ -213,114 +252,135 @@
     if (isCurrentSiteWhitelisted()) return;
     if (!shields.url && !shields.content && !shields.security) return;
 
+    isBatchRunning = true;
+    let hasMoreWork = false;
     let localThreats = [];
     let linksScannedCount = 0;
     let newThreatsCount = 0;
 
-    // 1. LINK REPUTATION SCAN
-    if (shields.url) {
-      const links = document.querySelectorAll(`a:not([${SCANNED_ATTR}])`);
-      links.forEach(link => {
-        link.setAttribute(SCANNED_ATTR, "true");
-
-        const href = link.href;
-        if (!href || href.startsWith("javascript:") || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
-          return;
+    try {
+      // 1. LINK REPUTATION SCAN (Batched)
+      if (shields.url) {
+        const links = Array.from(document.querySelectorAll(`a:not([${SCANNED_ATTR}])`));
+        const batchLinks = links.slice(0, MAX_LINKS_PER_BATCH);
+        if (links.length > MAX_LINKS_PER_BATCH) {
+          hasMoreWork = true;
         }
 
-        linksScannedCount++;
+        batchLinks.forEach(link => {
+          link.setAttribute(SCANNED_ATTR, "true");
 
-        // Fast synchronous check if analyzer is loaded
-        let result = null;
-        if (typeof OSNUrlAnalyzer !== "undefined") {
-          result = OSNUrlAnalyzer.analyzeUrlSafety(href, localWhitelisted);
-          handleUrlResult(link, href, result);
-        } else {
-          // Fallback to background worker
-          chrome.runtime.sendMessage({ action: "checkUrlSafety", url: href }, (response) => {
-            if (chrome.runtime.lastError || !response) return;
-            handleUrlResult(link, href, response);
-          });
-        }
-      });
-    }
+          const href = link.href;
+          if (!href || href.startsWith("javascript:") || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+            return;
+          }
 
-    function handleUrlResult(link, href, response) {
-      if (response && !response.safe) {
-        newThreatsCount++;
-        const threat = {
-          id: "url-" + Math.random().toString(36).substring(2, 11),
-          type: "Phishing / Malicious Link",
-          severity: response.severity || "warning",
-          message: response.reason,
-          target: href
-        };
-        localThreats.push(threat);
-        addUrlWarningBadge(link, threat);
-        reportCurrentThreats([threat], { linksScanned: 0, threats: 1 });
+          linksScannedCount++;
+
+          // Fast synchronous check if analyzer is loaded
+          let result = null;
+          if (typeof OSNUrlAnalyzer !== "undefined") {
+            result = OSNUrlAnalyzer.analyzeUrlSafety(href, localWhitelisted);
+            handleUrlResult(link, href, result);
+          } else {
+            // Fallback to background worker
+            chrome.runtime.sendMessage({ action: "checkUrlSafety", url: href }, (response) => {
+              if (chrome.runtime.lastError || !response) return;
+              handleUrlResult(link, href, response);
+            });
+          }
+        });
       }
-    }
 
-    // 2. SCAM & SPAM CONTENT DETECTION
-    if (shields.content) {
-      const containers = getSocialTextContainers();
-      containers.forEach(container => {
-        container.setAttribute(SCANNED_ATTR, "true");
-        const text = container.textContent || "";
-        if (!text.trim()) return;
-
-        let scamScan = { flagged: false };
-        if (typeof OSNScamAnalyzer !== "undefined") {
-          scamScan = OSNScamAnalyzer.detectScamContent(text);
-        }
-
-        if (scamScan.flagged) {
+      function handleUrlResult(link, href, response) {
+        if (response && !response.safe) {
           newThreatsCount++;
           const threat = {
-            id: "content-" + Math.random().toString(36).substring(2, 11),
-            type: scamScan.category || "Suspicious Content",
-            severity: scamScan.severity || "warning",
-            message: scamScan.reason,
-            target: text.trim().substring(0, 70) + (text.trim().length > 70 ? "..." : "")
+            id: "url-" + Math.random().toString(36).substring(2, 11),
+            type: "Phishing / Malicious Link",
+            severity: response.severity || "warning",
+            message: response.reason,
+            target: href
           };
           localThreats.push(threat);
-          addContentWarningBadge(container, threat);
+          addUrlWarningBadge(link, threat);
+          reportCurrentThreats([threat], { linksScanned: 0, threats: 1 });
         }
-      });
+      }
+
+      // 2. SCAM & SPAM CONTENT DETECTION (Batched to MAX_CONTAINERS_PER_BATCH = 50)
+      if (shields.content) {
+        const containers = getSocialTextContainers();
+        const batchContainers = containers.slice(0, MAX_CONTAINERS_PER_BATCH);
+        if (containers.length > MAX_CONTAINERS_PER_BATCH) {
+          hasMoreWork = true;
+        }
+
+        batchContainers.forEach(container => {
+          container.setAttribute(SCANNED_ATTR, "true");
+          const text = container.textContent || "";
+          if (!text.trim()) return;
+
+          let scamScan = { flagged: false };
+          if (typeof OSNScamAnalyzer !== "undefined") {
+            scamScan = OSNScamAnalyzer.detectScamContent(text);
+          }
+
+          if (scamScan.flagged) {
+            newThreatsCount++;
+            const threat = {
+              id: "content-" + Math.random().toString(36).substring(2, 11),
+              type: scamScan.category || "Suspicious Content",
+              severity: scamScan.severity || "warning",
+              message: scamScan.reason,
+              target: text.trim().substring(0, 70) + (text.trim().length > 70 ? "..." : "")
+            };
+            localThreats.push(threat);
+            addContentWarningBadge(container, threat);
+          }
+        });
+      }
+
+      // 3. INSECURE FORM SUBMISSION CHECKS
+      if (shields.security) {
+        const forms = document.querySelectorAll(`form:not([${SCANNED_ATTR}])`);
+        forms.forEach(form => {
+          form.setAttribute(SCANNED_ATTR, "true");
+          const action = form.getAttribute("action") || "";
+
+          if (action.startsWith("http://") && window.location.protocol === "https:") {
+            newThreatsCount++;
+            const threat = {
+              id: "security-form-" + Math.random().toString(36).substring(2, 11),
+              type: "Insecure Form Action",
+              severity: "critical",
+              message: "Form transmits data unencrypted over HTTP on a secure site.",
+              target: form.id ? `#${form.id}` : (form.className ? `.${form.className.split(" ")[0]}` : "Form")
+            };
+            localThreats.push(threat);
+            addFormWarningBadge(form, threat);
+          }
+        });
+      }
+
+      // Initial or incremental report
+      if (linksScannedCount > 0 || newThreatsCount > 0 || !isInitialReportDone) {
+        isInitialReportDone = true;
+        reportCurrentThreats(localThreats, {
+          linksScanned: linksScannedCount,
+          threats: newThreatsCount,
+          siteProtected: scanStats.siteProtected
+        });
+        // Reset siteProtected flag to prevent counting site multiple times on scroll mutations
+        scanStats.siteProtected = false;
+      }
+    } finally {
+      isBatchRunning = false;
     }
 
-    // 3. INSECURE FORM SUBMISSION CHECKS
-    if (shields.security) {
-      const forms = document.querySelectorAll(`form:not([${SCANNED_ATTR}])`);
-      forms.forEach(form => {
-        form.setAttribute(SCANNED_ATTR, "true");
-        const action = form.getAttribute("action") || "";
-
-        if (action.startsWith("http://") && window.location.protocol === "https:") {
-          newThreatsCount++;
-          const threat = {
-            id: "security-form-" + Math.random().toString(36).substring(2, 11),
-            type: "Insecure Form Action",
-            severity: "critical",
-            message: "Form transmits data unencrypted over HTTP on a secure site.",
-            target: form.id ? `#${form.id}` : (form.className ? `.${form.className.split(" ")[0]}` : "Form")
-          };
-          localThreats.push(threat);
-          addFormWarningBadge(form, threat);
-        }
-      });
-    }
-
-    // Initial or incremental report
-    if (linksScannedCount > 0 || newThreatsCount > 0 || !isInitialReportDone) {
-      isInitialReportDone = true;
-      reportCurrentThreats(localThreats, {
-        linksScanned: linksScannedCount,
-        threats: newThreatsCount,
-        siteProtected: scanStats.siteProtected
-      });
-      // Reset siteProtected flag to prevent counting site multiple times on scroll mutations
-      scanStats.siteProtected = false;
+    // If remaining unscanned nodes exist, queue the next batch in idle time
+    if (hasMoreWork) {
+      scheduleNextBatch();
     }
   }
 
@@ -364,13 +424,25 @@
       selector = '#content-text, ytd-comment-renderer #content-text';
     }
 
-    const elements = document.querySelectorAll(selector);
+    const unscannedSelector = selector
+      .split(",")
+      .map(part => `${part.trim()}:not([${SCANNED_ATTR}])`)
+      .join(", ");
+
+    let elements;
+    try {
+      elements = document.querySelectorAll(unscannedSelector);
+    } catch {
+      elements = document.querySelectorAll(selector);
+    }
+
     const unScanned = [];
-    elements.forEach(el => {
+    for (let i = 0; i < elements.length; i++) {
+      const el = elements[i];
       if (!el.hasAttribute(SCANNED_ATTR) && !el.closest(".osn-guard-tooltip-wrapper")) {
         unScanned.push(el);
       }
-    });
+    }
     return unScanned;
   }
 
@@ -569,10 +641,6 @@
       positionBanner(element, banner);
     });
   }
-
-  // Keep PII alert banners aligned on scroll or viewport changes
-  window.addEventListener("scroll", updateAllBannerPositions, { passive: true });
-  window.addEventListener("resize", updateAllBannerPositions, { passive: true });
 
   function removePiiWarning(element) {
     element.classList.remove("osn-guard-input-warning", "osn-guard-input-critical");

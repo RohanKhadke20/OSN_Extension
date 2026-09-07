@@ -15,7 +15,7 @@
 | **TSK-02** | Phase 1 | **P1 (Critical)** | Add comprehensive repository `.gitignore` | `.gitignore` | None | **COMPLETED** | `git status` check |
 | **TSK-03** | Phase 1 | **P2 (Important)** | Declare explicit Content Security Policy in manifest | `manifest.json` | None | **COMPLETED** | `npm run check`, CSP verified |
 | **TSK-04** | Phase 2 | **P2 (Important)** | Add custom regex compilation caching in PII engine | `core/pii-analyzer.js`, `tests/pii-detector.test.js` | None | **COMPLETED** | `npm test` |
-| **TSK-05** | Phase 2 | **P2 (Important)** | Implement node batch capping for generic web DOMs | `content.js` | None | **PENDING** | `npm run check`, test sandbox load |
+| **TSK-05** | Phase 2 | **P2 (Important)** | Implement node batch capping for generic web DOMs | `content.js` | None | **COMPLETED** | `npm run check`, test sandbox load |
 | **TSK-06** | Phase 3 | **P2 (Important)** | Build zero-dependency distribution packaging script | `scripts/pack.js`, `package.json` | TSK-01 | **PENDING** | `npm run pack` generates valid `.zip` |
 | **TSK-07** | Phase 4 | **P3 (Improvement)** | Add automated headless browser E2E test harness | `tests/e2e/`, `package.json` | TSK-06 | **PENDING** | `npm run test:e2e` |
 

@@ -1,8 +1,9 @@
 # OSN Guard - Social Safety & Privacy Shield
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](manifest.json)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](manifest.json)
 [![Manifest](https://img.shields.io/badge/Manifest-V3-success.svg)](manifest.json)
-[![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-85%20passing-brightgreen.svg)](tests/)
+[![Benchmarks](https://img.shields.io/badge/benchmarks-60k%2B%20ops%2Fsec-orange.svg)](scripts/bench.js)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-blue.svg)](.github/workflows/ci.yml)
 [![Security](https://img.shields.io/badge/CSP-zero--external--network-blueviolet.svg)](manifest.json)
 
@@ -69,33 +70,41 @@ Concurrent link and threat detections are serialized via a promise queue in `bac
 * **International Bank Account Numbers (IBAN)**: Detects international bank account formats with strict **ISO 7064 Mod-97** checksum validation, safeguarding international wire and banking privacy.
 * **Payment Cards**: 13-to-19 digit card detection validated via the **Luhn Algorithm (Mod 10)**. Rejects non-card digit sequences and timestamps.
 * **US Social Security Numbers (SSN)**: Detects `XXX-XX-XXXX` and `XXX XX XXXX` formats and validates against prohibited area, group, and serial rules.
-* **Modern API Secrets & Private Keys**: Detects leaked OpenAI (`sk-...`), Anthropic (`sk-ant-...`), GitHub personal access tokens (`ghp_...` and modern `github_pat_...`), Stripe secret keys (`sk_live_...`, `rk_live_...`), Slack tokens (`xoxb-...`), Google/Firebase API keys (`AIza...`), AWS Access Keys (`AKIA...`), and PEM private key blocks.
+* **Modern API Secrets & Private Keys**: Detects leaked OpenAI (`sk-...`), Anthropic (`sk-ant-...`), GitHub personal access tokens (`ghp_...` and modern `github_pat_...`), Stripe secret keys (`sk_live_...`, `rk_live_...`), Slack tokens (`xoxb-...`), Google/Firebase API keys (`AIza...`), AWS Access Keys (`AKIA...`), and PEM private key blocks (PGP, DSA, ENCRYPTED).
 * **Phone Numbers**: Handles international and North American formats (`+1 (555) 234-5678`, `+44 20 7946 0958`, `+91 98765 43210`).
+* **Live Interactive Redactor & Sanitizer Sandbox**: Options page preview sandbox with real-time text sanitization, custom regex testing, and single-click sanitized clipboard copy.
 * **Composer Optimization**: Exemption of password/file fields, accelerated paste inspection (50ms), and zero-reflow `textContent` inspection for contenteditable social editors.
-* **Custom User Patterns**: User-defined regular expressions configurable in the Options page with custom severity tags and non-blocking validation notices.
+* **Custom User Patterns**: User-defined regular expressions configurable in the Options page with LRU compilation caching and non-blocking validation notices.
 
 ### 2. URL Reputation & Phishing Scanner
 * **Embedded Authority Userinfo Spoofing**: Intercepts classic phishing lures containing fake credentials in the authority (`https://google.com@phishing-target.com`).
-* **IDN Homograph / Punycode Detection**: Intercepts spoofed Unicode/Punycode domains (`xn--...`) commonly used to impersonate brands like PayPal, Apple, or Google.
-* **Raw IP Hostnames (IPv4, IPv6, Hex/Dword)**: Identifies direct IP address links (`192.168.1.100`, IPv6 `[::1]`, and dword integer IP formats).
-* **Open Redirect Heuristics**: Detects URLs containing external destination parameters (`?redirect=`, `?url=`, `?next=`).
+* **IDN Homograph & Mixed-Script Detection**: Intercepts spoofed Unicode/Punycode domains (`xn--...`) and Latin-Cyrillic / Latin-Greek mixed-script confusable homoglyphs.
+* **Obfuscated IP Hostnames**: Identifies IPv4, IPv6 (`[::1]`), dotted-octal (`0177.0.0.1`), dotted-hex (`0x7f.0.0.1`), and integer dword (`2130706433`) notation.
+* **Suspicious Executable & Script Downloads**: Detects direct links to dangerous executables and dropper scripts (`.exe`, `.scr`, `.bat`, `.vbs`, `.ps1`, `.msi`, `.hta`, `.apk`, `.iso`).
+* **URL Shortener Destination Obscurity**: Detects URL shortener links (`bit.ly`, `tinyurl.com`, `is.gd`, `t.ly`) and compound risk combinations.
+* **Open Redirect Heuristics**: Detects URLs containing external destination parameters (`?redirect=`, `?url=`, `?next=`) and inspects destination targets recursively.
 * **High-Abuse Disposable TLDs**: Flags risky low-cost TLDs (`.xyz`, `.cc`, `.info`, `.click`, `.top`, `.sbs`, `.cfd`, `.beauty`, etc.).
 * **Phishing Keywords**: Analyzes URL subdomains and paths for multi-keyword phishing lures (`login`, `verify`, `account`, `banking`, `airdrop`).
-* **Protocol Warnings**: Flags unencrypted `http://` links on social platforms.
-* **Domain Whitelist**: Honors exact and wildcard entries (`*.mycompany.com`), bypassing scans for verified intranets.
+* **Developer Intranet & Port Whitelist**: Supports exact hosts, subdomains, wildcards (`*.corp.com`), port specifications (`localhost:3000`), and private subnet ranges (`192.168.*`, `10.*`).
 
 ### 3. Scam & Fraud Content Filter
+* **Web3 / Crypto Drainer Signatures**: Detects requests tricking users into signing Permit2 batch allowances, `setApprovalForAll`, `increaseAllowance`, and raw `eth_sign` payloads.
 * **QR Code Phishing (Quishing)**: Detects urgent instructions directing users to scan off-screen QR codes to bypass link safety scanners.
 * **NFT Drainers & Stealth Drops**: Identifies fake free mint lures and malicious contract approval scams.
 * **AI Token & Yield Scams**: Catches fraudulent AI compute, arbitrage bots, and guaranteed yield schemes.
 * **Crypto Drainers & Seed Phrase Theft**: Flags requests asking users to "enter seed phrase", "enter secret recovery phrase", or "connect wallet to claim".
-* **Crypto Doubling Schemes**: Detects classic fake giveaways ("double your bitcoin", "send ETH for 2x return").
-* **Credential Phishing & Urgency Cues**: Catches urgent threats designed to bypass critical thinking ("account suspension warning", "unusual activity detected").
-* **Tech Support Scams**: Flags fake virus removal hotlines ("call Microsoft support toll-free").
+* **Modern Social Engineering Scams**: Detects romance grooming / pig-butchering investment redirects, fake invoice / auto-renewal refund scams, and family emergency impersonation.
 * **Severity Prioritization**: Compound threats automatically surface critical risks over secondary warnings.
 
-### 4. Insecure Form Warning
-* Warns users when an unencrypted HTTP action target (`action="http://..."`) is present on a secure HTTPS website.
+### 4. Form Action & Security Inspector
+* **Mixed-Content Submissions**: Warns when an unencrypted HTTP form action (`action="http://..."`) is present on a secure HTTPS website.
+* **Malicious URI Schemes**: Flags dangerous execution schemes (`javascript:`, `data:`) in form action targets.
+* **Cross-Origin Credential Theft**: Flags password and payment forms posting credentials to external unverified domains.
+
+### 5. Quick Actions & Incident Auditing
+* **Context Menus**: Right-click any link to "Scan link with OSN Guard" or any text to "Analyze text for scams/PII" with non-blocking toast alerts.
+* **Security Audit Event Log**: Rolling 50-event incident history in Options UI with severity indicators, incident timestamps, and single-click JSON export.
+* **Accessible Keyboard Interaction**: Badges support full keyboard navigation (`Tab`, `Enter`, `Space` toggle, and `Escape` dismiss) with WCAG-compliant ARIA attributes.
 
 ---
 
@@ -106,46 +115,59 @@ osn-safety-scanner/
 ├── .github/
 │   └── workflows/ci.yml       # GitHub Actions cross-platform matrix CI (Node 18/20/22)
 ├── manifest.json              # Manifest V3 configuration & content script declarations
-├── background.js              # Service worker (tab threat store, badge counter, stats queue)
-├── content.js                 # In-page scanner, floating tooltip coordinator, PII watcher
-├── content.css                # Tooltip, badge, and banner styles
+├── background.js              # Service worker (tab threat store, badge sync, audit log buffer)
+├── content.js                 # In-page scanner, floating tooltips, toast dispatcher, keyboard ARIA
+├── content.css                # Tooltip, badge, toast notification, and focus-visible styles
 ├── core/
-│   ├── url-analyzer.js        # Heuristics URL safety engine, open redirects, IPv6/dword
-│   ├── pii-analyzer.js        # Multi-pattern PII detector, Luhn check, ISO 7064 IBAN check
-│   └── scam-analyzer.js       # Quishing, NFT drainers, AI fraud, seed-phrase text detector
+│   ├── url-analyzer.js        # Heuristics URL safety engine, IDN, IP obfuscation, shorteners
+│   ├── pii-analyzer.js        # Multi-pattern PII detector, Luhn check, ISO 7064 IBAN, LRU cache
+│   └── scam-analyzer.js       # Modern scam rules, Web3 drainers, romance grooming, refund fraud
 ├── popup/
 │   ├── popup.html             # Glassmorphic safety dashboard UI
 │   ├── popup.js               # Reactive score calculator, shield toggles, in-place rescan
 │   └── popup.css              # Dashboard styling, accent variables, SVG radial gauge
 ├── options/
-│   ├── options.html           # Settings UI (custom PII rules, whitelist, live metrics)
-│   ├── options.js             # Options controller, non-blocking error notices, regex cleaner
+│   ├── options.html           # Settings UI (PII sandbox, whitelist, audit log, metrics)
+│   ├── options.js             # Options controller, sandbox redactor, audit export & clear
 │   └── (shared styling)
+├── scripts/
+│   ├── pack.js                # Zero-dependency MS-DOS/DEFLATE extension zip packager
+│   └── bench.js               # Zero-dependency performance benchmark suite (node:perf_hooks)
 ├── tests/
 │   ├── dashboard-score.test.js# Dashboard scoring engine & safety status transition tests
-│   ├── url-safety.test.js     # URL analyzer unit, IPv6, userinfo spoofing & TLD tests
-│   ├── pii-detector.test.js   # PII, Luhn algorithm, IBAN ISO 7064 & API token tests
-│   ├── scam-detector.test.js  # Scam, quishing, drainer, AI fraud & priority tests
-│   └── storage-sync.test.js   # Whitelist wildcard, counter math & resilience tests
+│   ├── url-safety.test.js     # URL analyzer unit, IDN, shorteners, dangerous executables
+│   ├── pii-detector.test.js   # PII, Luhn algorithm, IBAN ISO 7064, LRU regex compilation tests
+│   ├── scam-detector.test.js  # Scam, quishing, Web3 drainer, romance grooming tests
+│   ├── storage-sync.test.js   # Whitelist wildcard, developer ports, resilience tests
+│   ├── bench.test.js          # Benchmark suite unit tests
+│   └── e2e/
+│       ├── extension-lifecycle.test.js # Headless browser extension lifecycle & UI E2E test
+│       └── test-server.js     # Zero-dependency local test HTTP server
 ├── test-page.html             # Interactive browser sandbox for manual extension verification
-└── package.json               # Test scripts, static check scripts & project metadata
+└── package.json               # Scripts, static check scripts, and project metadata
 ```
 
 ---
 
 ## Running Automated Tests & Verification
 
-OSN Guard uses Node.js's native test runner (`node:test` and `node:assert/strict`), requiring zero external test dependencies:
+OSN Guard uses Node.js's native test runner (`node:test` and `node:assert/strict`) and zero external dependencies:
 
 ```bash
-# Run syntax and static checks
+# Run syntax and static checks across all 13 JavaScript files
 npm run check
 
-# Run complete test suite (53 tests across 13 suites)
+# Run complete unit test suite (85 tests across 21 suites)
 npm test
 
-# Run tests in watch mode during development
-npm run test:watch
+# Run performance benchmark suite (URL, PII, and Scam engines)
+npm run bench
+
+# Run automated headless browser end-to-end lifecycle tests
+npm run test:e2e
+
+# Build production Chrome Web Store distribution archive
+npm run pack
 ```
 
 ---

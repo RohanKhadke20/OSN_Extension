@@ -2,7 +2,7 @@
 
 **Document ID:** OSN-ENG-BASE-001  
 **Target Repository:** `RohanKhadke20/OSN_Extension` (`D:\Practice\osn-safety-scanner`)  
-**Current Version:** `1.2.0`  
+**Current Version:** `1.3.0`  
 **Manifest Version:** MV3  
 **Baseline Date:** 2026-09-07  
 **Author:** Principal Software Architect, Senior Security Engineer, QA & DevOps Lead  
@@ -13,11 +13,11 @@
 
 **OSN Guard** is a client-side security and privacy browser extension engineered for Online Social Networks (OSNs) and interactive web applications. Built on Google Chrome Manifest V3 (MV3), the extension intercepts Personal Identifiable Information (PII) leaks in composers before submission, scans links for malicious reputations, punycode homographs, and open redirects, inspects public feeds for financial and social engineering scams, and warns users of insecure HTTP form action targets.
 
-Over nine verified engineering iterations, the codebase has established:
+Over ten verified engineering iterations, the codebase has established:
 - Pure client-side zero-leak architecture (no telemetry, no external font or script dependencies, full local privacy).
-- Deterministic heuristic and algorithmic analyzers (ISO 7064 Mod-97 IBAN, Luhn Mod-10 payment cards, US SSN, high-entropy tokens, JWTs, dangerous schemes).
-- Robust MV3 lifecycle handling (`chrome.storage.session` for transient tab threat persistence and navigation cleanup).
-- 63 automated unit tests across 14 suites running on Node.js test runner with zero external runtime dependencies.
+- Deterministic heuristic and algorithmic analyzers (ISO 7064 Mod-97 IBAN, Luhn Mod-10 payment cards, US SSN, high-entropy tokens, JWTs, dangerous schemes, Web3 drainer approval signatures, obfuscated IP notations).
+- Robust MV3 lifecycle handling (`chrome.storage.session` for transient tab threat persistence, tab switch sync, and navigation cleanup).
+- 85 automated unit tests across 21 suites, 4 end-to-end headless browser lifecycle tests, and 4 throughput benchmarks running on native Node.js with zero external runtime dependencies.
 - Multi-OS and multi-version CI/CD matrix via GitHub Actions (Ubuntu/Windows across Node 18, 20, 22).
 
 While the core detection algorithms and basic browser extension components are sound, preparing this repository for enterprise and commercial Chrome Web Store / Firefox AMO production requires addressing several critical operational and engineering maturity gaps: missing extension icons, broad `<all_urls>` script execution without node batch caps on non-OSN pages, lack of end-to-end browser integration tests, missing `.gitignore` and build packaging scripts, and unlocalized UI text.

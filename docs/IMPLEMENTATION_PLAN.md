@@ -34,9 +34,9 @@
 | **TSK-21** | Phase 9 | **P1 (Critical)** | GitHub Actions CI/CD validation & packaging pipeline | `.github/workflows/ci.yml` | TSK-06, TSK-17 | **COMPLETED** | Workflow execution |
 | **TSK-22** | Phase 9 | **P2 (Important)** | Security audit event log buffer & telemetry exporter | `background.js`, `options/options.html`, `options/options.js` | None | **COMPLETED** | `npm run check`, E2E test |
 | **TSK-23** | Phase 9 | **P2 (Important)** | Developer intranet & localhost port whitelist expansion | `core/url-analyzer.js`, `tests/url-safety.test.js` | None | **COMPLETED** | `npm test` |
-| **TSK-24** | Phase 10 | **P2 (Important)** | Synchronize production version bump to 1.3.0 | `manifest.json`, `package.json`, docs | None | **PENDING** | `npm run check`, `npm run pack` |
-| **TSK-25** | Phase 10 | **P2 (Important)** | Comprehensive production documentation & user guide | `README.md` | None | **PENDING** | Documentation review |
-| **TSK-26** | Phase 10 | **P2 (Important)** | Standard security policy & vulnerability disclosure policy | `SECURITY.md` | None | **PENDING** | Documentation review |
+| **TSK-24** | Phase 10 | **P2 (Important)** | Synchronize production version bump to 1.3.0 | `manifest.json`, `package.json`, docs | None | **COMPLETED** | `npm run check`, `npm run pack` |
+| **TSK-25** | Phase 10 | **P2 (Important)** | Comprehensive production documentation & user guide | `README.md` | None | **COMPLETED** | Documentation review |
+| **TSK-26** | Phase 10 | **P2 (Important)** | Standard security policy & vulnerability disclosure policy | `SECURITY.md` | None | **COMPLETED** | Documentation review |
 
 ---
 

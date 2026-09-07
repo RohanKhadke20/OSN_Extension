@@ -462,19 +462,95 @@
         const forms = document.querySelectorAll(`form:not([${SCANNED_ATTR}])`);
         forms.forEach(form => {
           form.setAttribute(SCANNED_ATTR, "true");
-          const action = form.getAttribute("action") || "";
+          const actionAttr = (form.getAttribute("action") || "").trim();
+          const targetName = form.id ? `#${form.id}` : (form.className ? `.${form.className.split(" ")[0]}` : "Form");
 
-          if (action.startsWith("http://") && window.location.protocol === "https:") {
+          // Check A: Mixed content submission (HTTP action on HTTPS origin)
+          if (actionAttr.startsWith("http://") && window.location.protocol === "https:") {
             newThreatsCount++;
             const threat = {
               id: "security-form-" + Math.random().toString(36).substring(2, 11),
               type: "Insecure Form Action",
               severity: "critical",
-              message: "Form transmits data unencrypted over HTTP on a secure site.",
-              target: form.id ? `#${form.id}` : (form.className ? `.${form.className.split(" ")[0]}` : "Form")
+              message: "Form transmits data unencrypted over HTTP on a secure site (mixed content).",
+              target: targetName
             };
             localThreats.push(threat);
             addFormWarningBadge(form, threat);
+            return;
+          }
+
+          // Check B: Dangerous URI schemes in form action (javascript:, data:)
+          const lowerAction = actionAttr.toLowerCase();
+          if (lowerAction.startsWith("javascript:") || lowerAction.startsWith("data:")) {
+            newThreatsCount++;
+            const threat = {
+              id: "security-form-" + Math.random().toString(36).substring(2, 11),
+              type: "Malicious Form Action",
+              severity: "critical",
+              message: `Dangerous execution scheme in form action (${lowerAction.split(":")[0]}:).`,
+              target: targetName
+            };
+            localThreats.push(threat);
+            addFormWarningBadge(form, threat);
+            return;
+          }
+
+          // Check C: Form destination URL safety analysis (phishing domains, raw IPs, IDN homographs, shorteners)
+          if (actionAttr.startsWith("http://") || actionAttr.startsWith("https://") || actionAttr.startsWith("//")) {
+            const fullActionUrl = actionAttr.startsWith("//") ? window.location.protocol + actionAttr : actionAttr;
+            if (typeof OSNUrlAnalyzer !== "undefined" && OSNUrlAnalyzer.analyzeUrlSafety) {
+              const actionSafety = OSNUrlAnalyzer.analyzeUrlSafety(fullActionUrl, localWhitelisted);
+              if (!actionSafety.safe) {
+                newThreatsCount++;
+                const threat = {
+                  id: "security-form-" + Math.random().toString(36).substring(2, 11),
+                  type: "Phishing Form Action",
+                  severity: actionSafety.severity || "critical",
+                  message: `Form submits to untrusted destination: ${actionSafety.reason}`,
+                  target: targetName
+                };
+                localThreats.push(threat);
+                addFormWarningBadge(form, threat);
+                return;
+              }
+            }
+          }
+
+          // Check D: Cross-origin password or payment credential harvesting
+          const hasCredentialField = Boolean(
+            form.querySelector("input[type='password']") ||
+            form.querySelector("input[autocomplete='current-password']") ||
+            form.querySelector("input[autocomplete='cc-number']")
+          );
+
+          if (hasCredentialField && (actionAttr.startsWith("http://") || actionAttr.startsWith("https://") || actionAttr.startsWith("//"))) {
+            try {
+              const fullAction = actionAttr.startsWith("//") ? window.location.protocol + actionAttr : actionAttr;
+              const actionHost = new URL(fullAction).hostname.toLowerCase().replace(/\.+$/, "");
+              const currentHost = window.location.hostname.toLowerCase().replace(/\.+$/, "");
+              const isSameDomain = actionHost === currentHost || actionHost.endsWith("." + currentHost) || currentHost.endsWith("." + actionHost);
+
+              if (!isSameDomain && typeof OSNUrlAnalyzer !== "undefined") {
+                const isActionWhitelisted = OSNUrlAnalyzer.isDomainWhitelisted(actionHost, localWhitelisted);
+                const isActionSafe = OSNUrlAnalyzer.isSafeDomain(actionHost);
+
+                if (!isActionWhitelisted && !isActionSafe) {
+                  newThreatsCount++;
+                  const threat = {
+                    id: "security-form-" + Math.random().toString(36).substring(2, 11),
+                    type: "Credential Harvester Form",
+                    severity: "critical",
+                    message: `Credential form submits passwords/payment data to external unverified domain (${actionHost}).`,
+                    target: targetName
+                  };
+                  localThreats.push(threat);
+                  addFormWarningBadge(form, threat);
+                }
+              }
+            } catch {
+              // ignore malformed action URLs
+            }
           }
         });
       }

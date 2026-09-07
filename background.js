@@ -201,6 +201,24 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   getSessionStorage().remove(tabKey);
 });
 
+// Synchronize toolbar badge immediately upon active tab switch
+if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.onActivated) {
+  chrome.tabs.onActivated.addListener((activeInfo) => {
+    const tabId = activeInfo.tabId;
+    if (!tabId) return;
+
+    const tabKey = `tab_${tabId}`;
+    getSessionStorage().get([tabKey], (result) => {
+      const tabRecord = result && result[tabKey] ? result[tabKey] : null;
+      if (tabRecord && Array.isArray(tabRecord.threats) && tabRecord.threats.length > 0) {
+        updateTabBadge(tabId, tabRecord.threats);
+      } else {
+        updateTabBadge(tabId, []);
+      }
+    });
+  });
+}
+
 // Handle context menu clicks for link and selection scanning
 if (typeof chrome !== "undefined" && chrome.contextMenus && chrome.contextMenus.onClicked) {
   chrome.contextMenus.onClicked.addListener((info, tab) => {

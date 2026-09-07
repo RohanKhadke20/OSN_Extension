@@ -179,6 +179,7 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
       scanData.urlBadges > 0 || scanData.contentBadges > 0 || scanData.formBadges > 0,
       `Expected badges on test page, found: ${JSON.stringify(scanData)}`
     );
+    assert.ok(scanData.formBadges >= 1, `Expected at least 1 form badge on test-page.html, found ${scanData.formBadges}`);
 
     // Verify scan result toast dispatch to content script
     const targets = await browser.getTargets();

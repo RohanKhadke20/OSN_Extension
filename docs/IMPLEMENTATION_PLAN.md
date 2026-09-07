@@ -25,9 +25,12 @@
 | **TSK-12** | Phase 6 | **P2 (Important)** | Context menu quick analysis engine for links and text | `manifest.json`, `background.js`, `content.js` | TSK-08 | **COMPLETED** | `npm run check`, E2E test |
 | **TSK-13** | Phase 6 | **P2 (Important)** | Interactive PII Redactor & Sanitizer preview sandbox | `options/options.html`, `options/options.js` | TSK-04 | **COMPLETED** | `npm run check`, `npm test` |
 | **TSK-14** | Phase 6 | **P3 (Improvement)** | Tab Threat Notification & Toast Alert Dispatcher | `content.js`, `content.css` | TSK-11 | **COMPLETED** | `npm run check`, E2E test |
-| **TSK-15** | Phase 7 | **P2 (Important)** | Form Action & Insecure Submission Inspector | `content.js`, `core/url-analyzer.js` | None | **PENDING** | `npm run check`, E2E test |
-| **TSK-16** | Phase 7 | **P2 (Important)** | Live Threat Counter Badge Reactive Tab-Switch Sync | `background.js` | None | **PENDING** | `npm run check`, E2E test |
-| **TSK-17** | Phase 7 | **P3 (Improvement)** | Zero-dependency core performance benchmark suite | `scripts/bench.js`, `package.json` | None | **PENDING** | `npm run bench` |
+| **TSK-15** | Phase 7 | **P2 (Important)** | Form Action & Insecure Submission Inspector | `content.js`, `core/url-analyzer.js` | None | **COMPLETED** | `npm run check`, E2E test |
+| **TSK-16** | Phase 7 | **P2 (Important)** | Live Threat Counter Badge Reactive Tab-Switch Sync | `background.js` | None | **COMPLETED** | `npm run check`, E2E test |
+| **TSK-17** | Phase 7 | **P3 (Improvement)** | Zero-dependency core performance benchmark suite | `scripts/bench.js`, `package.json` | None | **COMPLETED** | `npm run bench` |
+| **TSK-18** | Phase 8 | **P2 (Important)** | Suspicious executable & script download link heuristic | `core/url-analyzer.js`, `tests/url-safety.test.js` | None | **PENDING** | `npm test` |
+| **TSK-19** | Phase 8 | **P2 (Important)** | Web3 / Crypto drainer approval signature detection | `core/scam-analyzer.js`, `tests/scam-detector.test.js` | None | **PENDING** | `npm test` |
+| **TSK-20** | Phase 8 | **P3 (Improvement)** | Accessible keyboard interaction for badge tooltips | `content.js`, `content.css` | TSK-11 | **PENDING** | `npm run check`, E2E test |
 
 ---
 
@@ -230,3 +233,41 @@
 - **Acceptance Criteria:**
   - `npm run bench` runs and outputs operations per second and latency percentiles (p50, p95, p99).
 - **Validation:** `npm run bench` passes without dependencies.
+
+---
+
+### TSK-18: Suspicious Executable & Script Download Link Heuristic
+- **Objective:** Detect dangerous file extensions (`.exe`, `.scr`, `.bat`, `.cmd`, `.vbs`, `.ps1`, `.msi`, `.hta`, `.apk`, `.iso`, `.jar`) in URL paths, especially from unknown, suspicious, or unencrypted hosts, alerting users before downloading potentially malicious executables.
+- **Files Affected:**
+  - `core/url-analyzer.js`
+  - `tests/url-safety.test.js`
+- **Acceptance Criteria:**
+  - URLs ending in risky executable/script extensions trigger warning or critical security flags with actionable explanation.
+  - Safe whitelist hosts and normal benign file extensions (`.pdf`, `.png`, `.jpg`, `.html`) are not flagged.
+- **Validation:** `npm test` with dedicated test cases.
+
+---
+
+### TSK-19: Web3 / Crypto Drainer Approval Signature Detection
+- **Objective:** Modernize `core/scam-analyzer.js` to recognize crypto drainer social engineering tactics requesting dangerous off-chain or on-chain approvals, such as `Permit2` batch signatures, `setApprovalForAll`, `increaseAllowance`, and blind `eth_sign` requests.
+- **Files Affected:**
+  - `core/scam-analyzer.js`
+  - `tests/scam-detector.test.js`
+- **Acceptance Criteria:**
+  - Social engineering lures tricking users into signing unlimited token approvals or Permit2 messages are flagged with critical severity.
+  - Legitimate discussions without high-urgency claim/verify lures remain unaffected.
+- **Validation:** `npm test` with dedicated test cases.
+
+---
+
+### TSK-20: Accessible Keyboard Interaction for Badge Tooltips
+- **Objective:** Enhance DOM overlays in `content.js` and `content.css` so that badges are focusable via keyboard (`tabindex="0"`, `role="button"` or `role="region"`, `aria-label`, `aria-expanded`) and users can toggle tooltips with `Enter` or `Space` keys, or dismiss them with `Escape`.
+- **Files Affected:**
+  - `content.js`
+  - `content.css`
+  - `tests/e2e/extension-lifecycle.test.js`
+- **Acceptance Criteria:**
+  - Badges can receive keyboard focus and display accessible tooltips without requiring mouse hover.
+  - `Escape` key dismisses any open tooltip.
+- **Validation:** `npm run check`, `npm run test:e2e`.
+

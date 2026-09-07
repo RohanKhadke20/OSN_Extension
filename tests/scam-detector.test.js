@@ -184,6 +184,25 @@ describe("Scam & Fraud Content Detector", () => {
     }
   });
 
+  it("detects Web3 crypto drainer approvals and malicious signature lures", () => {
+    const drainerTexts = [
+      "Claim Season 2 Airdrop! Sign Permit2 batch message to verify your eligibility.",
+      "Security Migration Notice: Please execute setApprovalForAll on our new vault contract to protect your NFTs.",
+      "IncreaseAllowance to unlimited token allowance on this router to participate in the flash loan pool.",
+      "Urgent verification: Sign eth_sign payload to authenticate wallet ownership.",
+      "Connect and sign this message to verify wallet and receive 5,000 USDC instantly.",
+      "Sign gasless transaction to claim your retroactive community rewards."
+    ];
+
+    for (const text of drainerTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected flagged for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "crypto-approval-drainer");
+      assert.match(res.category, /Web3 Approval Drainer/i);
+    }
+  });
+
   it("ignores benign regular social posts", () => {
     const benignTexts = [
       "Just had a wonderful brunch with friends! Hope everyone has a productive Monday.",

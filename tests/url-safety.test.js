@@ -6,7 +6,10 @@ const {
   isRawIpAddress,
   hasMixedScriptConfusables,
   isUrlShortener,
-  SHORTENER_DOMAINS
+  getDangerousFileExtension,
+  SHORTENER_DOMAINS,
+  DANGEROUS_FILE_EXTENSIONS,
+  HIGH_RISK_EXECUTABLE_EXTS
 } = require("../core/url-analyzer.js");
 
 describe("URL Safety Analyzer", () => {
@@ -313,5 +316,69 @@ describe("URL Safety Analyzer", () => {
     assert.equal(isUrlShortener("google.com"), false);
     assert.equal(isUrlShortener("github.com"), false);
     assert.equal(SHORTENER_DOMAINS.has("bit.ly"), true);
+  });
+
+  it("detects dangerous executable and script download links on untrusted domains", () => {
+    // Untrusted standalone executable (.exe, .msi, .iso, .apk) triggers warning
+    const exeResult = analyzeUrlSafety("https://untrusted-software-host.org/download/client_setup.exe");
+    assert.equal(exeResult.safe, false);
+    assert.equal(exeResult.severity, "warning");
+    assert.match(exeResult.reason, /dangerous executable or script file \(\.exe\)/i);
+
+    const msiResult = analyzeUrlSafety("https://external-unknown-site.net/patches/update.msi");
+    assert.equal(msiResult.safe, false);
+    assert.equal(msiResult.severity, "warning");
+    assert.match(msiResult.reason, /dangerous executable or script file \(\.msi\)/i);
+
+    // High-risk script droppers (.scr, .vbs, .bat, .hta, .ps1) escalate to critical
+    const scrResult = analyzeUrlSafety("https://unknown-host.org/screensaver.scr");
+    assert.equal(scrResult.safe, false);
+    assert.equal(scrResult.severity, "critical");
+    assert.match(scrResult.reason, /dangerous executable or script file \(\.scr\)/i);
+
+    const vbsResult = analyzeUrlSafety("https://unknown-host.org/run.vbs");
+    assert.equal(vbsResult.safe, false);
+    assert.equal(vbsResult.severity, "critical");
+
+    const batResult = analyzeUrlSafety("https://unknown-host.org/tools/cleaner.bat");
+    assert.equal(batResult.safe, false);
+    assert.equal(batResult.severity, "critical");
+
+    // Unencrypted HTTP + executable download has 2 heuristics -> critical
+    const httpExeResult = analyzeUrlSafety("http://untrusted-software-host.org/download/client_setup.exe");
+    assert.equal(httpExeResult.safe, false);
+    assert.equal(httpExeResult.severity, "critical");
+
+    // Query parameter download filename detection
+    const queryDownload = analyzeUrlSafety("https://unknown-site.org/get-file?download=malicious-payload.hta");
+    assert.equal(queryDownload.safe, false);
+    assert.equal(queryDownload.severity, "critical");
+    assert.match(queryDownload.reason, /dangerous executable or script file \(\.hta\)/i);
+
+    // Safe domains with executables should be permitted without false positives
+    const githubExe = analyzeUrlSafety("https://github.com/microsoft/terminal/releases/download/v1.0/Setup.msi");
+    assert.equal(githubExe.safe, true);
+    assert.match(githubExe.reason, /secure domain/i);
+
+    // Whitelisted domains with executables should be permitted
+    const whitelistedExe = analyzeUrlSafety("https://internal-repo.xyz/app.exe", ["internal-repo.xyz"]);
+    assert.equal(whitelistedExe.safe, true);
+    assert.match(whitelistedExe.reason, /whitelist/i);
+
+    // Benign file types (.pdf, .jpg, .png, .html) on unknown domains should not trigger executable heuristic
+    const pdfResult = analyzeUrlSafety("https://unknown-site.org/whitepaper.pdf");
+    assert.equal(pdfResult.safe, true);
+
+    const imgResult = analyzeUrlSafety("https://unknown-site.org/avatar.png");
+    assert.equal(imgResult.safe, true);
+
+    // getDangerousFileExtension helper checks
+    assert.equal(getDangerousFileExtension(new URL("https://example.com/file.exe")), ".exe");
+    assert.equal(getDangerousFileExtension(new URL("https://example.com/file.scr")), ".scr");
+    assert.equal(getDangerousFileExtension(new URL("https://example.com/file.pdf")), null);
+    assert.equal(getDangerousFileExtension(new URL("https://example.com/dl?item=payload.ps1")), ".ps1");
+    assert.equal(DANGEROUS_FILE_EXTENSIONS.has(".exe"), true);
+    assert.equal(HIGH_RISK_EXECUTABLE_EXTS.has(".scr"), true);
+    assert.equal(HIGH_RISK_EXECUTABLE_EXTS.has(".exe"), false);
   });
 });

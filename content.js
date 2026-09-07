@@ -361,6 +361,16 @@
     // Clean up timers on tab unload / navigation
     window.addEventListener("pagehide", cancelScheduledBatches, { passive: true });
     window.addEventListener("beforeunload", cancelScheduledBatches, { passive: true });
+
+    // Global Escape key listener to dismiss open tooltips
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        hideSharedTooltip();
+        document.querySelectorAll('.osn-guard-warning-badge[aria-expanded="true"]').forEach(b => {
+          b.setAttribute("aria-expanded", "false");
+        });
+      }
+    });
   }
 
   // Main Page Scanning Logic
@@ -667,7 +677,7 @@
     }
   }
 
-  // Badge Element Construction with Hover Tooltip Trigger
+  // Badge Element Construction with Accessible Keyboard & Hover Tooltip Triggers
   function createBadge(threat, threatType) {
     const badgeWrapper = document.createElement("span");
     badgeWrapper.className = "osn-guard-tooltip-wrapper";
@@ -676,11 +686,52 @@
     const badge = document.createElement("span");
     badge.className = `osn-guard-warning-badge osn-guard-badge-${threat.severity}`;
     badge.textContent = "!";
-    badge.setAttribute("role", "alert");
-    badge.setAttribute("aria-label", `OSN Guard alert: ${threat.type}`);
+    badge.setAttribute("role", "button");
+    badge.setAttribute("tabindex", "0");
+    badge.setAttribute("aria-haspopup", "dialog");
+    badge.setAttribute("aria-expanded", "false");
+    badge.setAttribute("aria-label", `OSN Guard alert: ${threat.type}. Press Enter or Space to view details.`);
 
-    badge.addEventListener("mouseenter", () => showSharedTooltip(badge, threat));
-    badge.addEventListener("mouseleave", hideSharedTooltip);
+    let isTooltipOpen = false;
+
+    function openTooltip() {
+      showSharedTooltip(badge, threat);
+      badge.setAttribute("aria-expanded", "true");
+      isTooltipOpen = true;
+    }
+
+    function closeTooltip() {
+      hideSharedTooltip();
+      badge.setAttribute("aria-expanded", "false");
+      isTooltipOpen = false;
+    }
+
+    badge.addEventListener("mouseenter", openTooltip);
+    badge.addEventListener("mouseleave", () => {
+      if (document.activeElement !== badge) {
+        closeTooltip();
+      }
+    });
+
+    badge.addEventListener("focus", openTooltip);
+    badge.addEventListener("blur", closeTooltip);
+
+    badge.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (isTooltipOpen) {
+          closeTooltip();
+        } else {
+          openTooltip();
+        }
+      } else if (e.key === "Escape") {
+        if (isTooltipOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeTooltip();
+        }
+      }
+    });
 
     badgeWrapper.appendChild(badge);
     return badgeWrapper;

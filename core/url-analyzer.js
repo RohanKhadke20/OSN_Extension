@@ -123,12 +123,56 @@
   // Dangerous URI schemes that can carry obfuscated scripts, file system exploits, or payload data
   const DANGEROUS_SCHEMES = new Set(["data:", "blob:", "file:", "filesystem:"]);
 
+  // Dangerous executable, script, and installer file extensions frequently abused for drive-by malware downloads
+  const DANGEROUS_FILE_EXTENSIONS = new Set([
+    ".exe", ".scr", ".bat", ".cmd", ".vbs", ".vbe",
+    ".ps1", ".msi", ".hta", ".apk", ".iso", ".jar",
+    ".wsf", ".cpl", ".reg"
+  ]);
+
+  // High-risk script droppers and screensaver binaries that warrant critical security alerts
+  const HIGH_RISK_EXECUTABLE_EXTS = new Set([
+    ".scr", ".hta", ".vbs", ".vbe", ".bat", ".cmd",
+    ".ps1", ".wsf", ".cpl", ".reg"
+  ]);
+
   // Open redirect query parameter names commonly used across platforms
   const REDIRECT_PARAM_NAMES = new Set([
     "redirect", "redirect_url", "redirect_to", "return_to", "return",
     "url", "dest", "destination", "next", "link", "target", "goto",
     "out", "forward", "redir", "r", "u"
   ]);
+
+  /**
+   * Identifies dangerous executable or script file extensions in a URL path or query parameters
+   * @param {URL} urlObj - Parsed URL object
+   * @returns {string|null} - File extension with leading dot (e.g. '.exe') or null
+   */
+  function getDangerousFileExtension(urlObj) {
+    if (!urlObj) return null;
+    const pathname = (urlObj.pathname || "").toLowerCase();
+    const lastSegment = pathname.split("/").filter(Boolean).pop() || "";
+    const pathExtMatch = lastSegment.match(/\.([a-z0-9]{2,5})$/i);
+    if (pathExtMatch) {
+      const ext = "." + pathExtMatch[1].toLowerCase();
+      if (DANGEROUS_FILE_EXTENSIONS.has(ext)) {
+        return ext;
+      }
+    }
+    if (urlObj.searchParams) {
+      for (const [, val] of urlObj.searchParams.entries()) {
+        if (!val) continue;
+        const valMatch = val.trim().toLowerCase().match(/[\w-]+\.([a-z0-9]{2,5})$/i);
+        if (valMatch) {
+          const ext = "." + valMatch[1].toLowerCase();
+          if (DANGEROUS_FILE_EXTENSIONS.has(ext)) {
+            return ext;
+          }
+        }
+      }
+    }
+    return null;
+  }
 
   /**
    * Checks if a given hostname is a raw IP address (IPv4, IPv6, octal/hex, or integer notation)
@@ -464,8 +508,16 @@
       heuristics.push("URL shortener detected: destination target is obscured");
     }
 
+    // Heuristic I: Suspicious executable or script download extension
+    const dangerousExt = getDangerousFileExtension(urlObj);
+    if (dangerousExt) {
+      heuristics.push(`Direct link to dangerous executable or script file (${dangerousExt})`);
+    }
+
     if (heuristics.length > 0) {
-      const isCritical = heuristics.length >= 2 || heuristics.some(h => h.includes("raw IP address") || h.includes("embedded credentials"));
+      const isCritical = heuristics.length >= 2 ||
+        heuristics.some(h => h.includes("raw IP address") || h.includes("embedded credentials")) ||
+        Boolean(dangerousExt && HIGH_RISK_EXECUTABLE_EXTS.has(dangerousExt));
       return {
         safe: false,
         reason: heuristics.join("; "),
@@ -484,10 +536,13 @@
     isRawIpAddress,
     hasMixedScriptConfusables,
     isUrlShortener,
+    getDangerousFileExtension,
     SAFE_DOMAINS,
     SUSPICIOUS_DOMAINS,
     SUSPICIOUS_TLDS,
     PHISHING_KEYWORDS,
-    SHORTENER_DOMAINS
+    SHORTENER_DOMAINS,
+    DANGEROUS_FILE_EXTENSIONS,
+    HIGH_RISK_EXECUTABLE_EXTS
   };
 });

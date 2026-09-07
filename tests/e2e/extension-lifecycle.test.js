@@ -181,6 +181,62 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
     );
     assert.ok(scanData.formBadges >= 1, `Expected at least 1 form badge on test-page.html, found ${scanData.formBadges}`);
 
+    // Verify accessible keyboard interaction on warning badges
+    const badgeAccessibility = await page.evaluate(`
+      (() => {
+        const badge = document.querySelector(".osn-guard-warning-badge");
+        if (!badge) return null;
+        return {
+          role: badge.getAttribute("role"),
+          tabindex: badge.getAttribute("tabindex"),
+          ariaExpanded: badge.getAttribute("aria-expanded"),
+          ariaHaspopup: badge.getAttribute("aria-haspopup"),
+          hasAriaLabel: Boolean(badge.getAttribute("aria-label"))
+        };
+      })()
+    `);
+
+    assert.ok(badgeAccessibility, "Warning badge was not found in DOM");
+    assert.equal(badgeAccessibility.role, "button");
+    assert.equal(badgeAccessibility.tabindex, "0");
+    assert.equal(badgeAccessibility.ariaExpanded, "false");
+    assert.equal(badgeAccessibility.ariaHaspopup, "dialog");
+    assert.equal(badgeAccessibility.hasAriaLabel, true);
+
+    // Trigger Enter keydown to toggle tooltip
+    const enterResult = await page.evaluate(`
+      (() => {
+        const badge = document.querySelector(".osn-guard-warning-badge");
+        badge.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+        const tooltip = document.querySelector(".osn-guard-floating-tooltip");
+        return {
+          ariaExpanded: badge.getAttribute("aria-expanded"),
+          tooltipDisplay: tooltip ? tooltip.style.display : "none",
+          tooltipText: tooltip ? tooltip.textContent : ""
+        };
+      })()
+    `);
+
+    assert.equal(enterResult.ariaExpanded, "true");
+    assert.equal(enterResult.tooltipDisplay, "block");
+    assert.ok(enterResult.tooltipText.includes("OSN Guard"));
+
+    // Trigger Escape keydown to dismiss tooltip
+    const escResult = await page.evaluate(`
+      (() => {
+        const badge = document.querySelector(".osn-guard-warning-badge");
+        badge.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+        const tooltip = document.querySelector(".osn-guard-floating-tooltip");
+        return {
+          ariaExpanded: badge.getAttribute("aria-expanded"),
+          tooltipDisplay: tooltip ? tooltip.style.display : "none"
+        };
+      })()
+    `);
+
+    assert.equal(escResult.ariaExpanded, "false");
+    assert.equal(escResult.tooltipDisplay, "none");
+
     // Verify scan result toast dispatch to content script
     const targets = await browser.getTargets();
     const swTarget = targets.find(t => t.type === "service_worker" && (t.url || "").includes(extensionId));

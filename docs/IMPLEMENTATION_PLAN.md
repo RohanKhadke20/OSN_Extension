@@ -28,9 +28,12 @@
 | **TSK-15** | Phase 7 | **P2 (Important)** | Form Action & Insecure Submission Inspector | `content.js`, `core/url-analyzer.js` | None | **COMPLETED** | `npm run check`, E2E test |
 | **TSK-16** | Phase 7 | **P2 (Important)** | Live Threat Counter Badge Reactive Tab-Switch Sync | `background.js` | None | **COMPLETED** | `npm run check`, E2E test |
 | **TSK-17** | Phase 7 | **P3 (Improvement)** | Zero-dependency core performance benchmark suite | `scripts/bench.js`, `package.json` | None | **COMPLETED** | `npm run bench` |
-| **TSK-18** | Phase 8 | **P2 (Important)** | Suspicious executable & script download link heuristic | `core/url-analyzer.js`, `tests/url-safety.test.js` | None | **PENDING** | `npm test` |
-| **TSK-19** | Phase 8 | **P2 (Important)** | Web3 / Crypto drainer approval signature detection | `core/scam-analyzer.js`, `tests/scam-detector.test.js` | None | **PENDING** | `npm test` |
-| **TSK-20** | Phase 8 | **P3 (Improvement)** | Accessible keyboard interaction for badge tooltips | `content.js`, `content.css` | TSK-11 | **PENDING** | `npm run check`, E2E test |
+| **TSK-18** | Phase 8 | **P2 (Important)** | Suspicious executable & script download link heuristic | `core/url-analyzer.js`, `tests/url-safety.test.js` | None | **COMPLETED** | `npm test` |
+| **TSK-19** | Phase 8 | **P2 (Important)** | Web3 / Crypto drainer approval signature detection | `core/scam-analyzer.js`, `tests/scam-detector.test.js` | None | **COMPLETED** | `npm test` |
+| **TSK-20** | Phase 8 | **P3 (Improvement)** | Accessible keyboard interaction for badge tooltips | `content.js`, `content.css` | TSK-11 | **COMPLETED** | `npm run check`, E2E test |
+| **TSK-21** | Phase 9 | **P1 (Critical)** | GitHub Actions CI/CD validation & packaging pipeline | `.github/workflows/ci.yml` | TSK-06, TSK-17 | **PENDING** | Workflow execution |
+| **TSK-22** | Phase 9 | **P2 (Important)** | Security audit event log buffer & telemetry exporter | `background.js`, `options/options.html`, `options/options.js` | None | **PENDING** | `npm run check`, E2E test |
+| **TSK-23** | Phase 9 | **P2 (Important)** | Developer intranet & localhost port whitelist expansion | `core/url-analyzer.js`, `tests/url-safety.test.js` | None | **PENDING** | `npm test` |
 
 ---
 
@@ -270,4 +273,42 @@
   - Badges can receive keyboard focus and display accessible tooltips without requiring mouse hover.
   - `Escape` key dismisses any open tooltip.
 - **Validation:** `npm run check`, `npm run test:e2e`.
+
+---
+
+### TSK-21: GitHub Actions CI/CD Validation & Packaging Pipeline
+- **Objective:** Establish continuous integration via `.github/workflows/ci.yml` automating lint/syntax checks (`npm run check`), test execution (`npm test`), performance benchmarks (`npm run bench`), and distribution packaging (`npm run pack`), uploading the packed `.zip` bundle as an artifact on releases and push to `main`.
+- **Files Affected:**
+  - `.github/workflows/ci.yml`
+- **Acceptance Criteria:**
+  - Standard multi-OS matrix (Ubuntu, Windows) testing Node.js 18.x and 20.x.
+  - Validates all repository quality gates and packages the Chrome Web Store zip bundle.
+- **Validation:** Syntax check on YAML workflow, manual or pull-request trigger.
+
+---
+
+### TSK-22: Security Audit Event Log Buffer & Telemetry Exporter
+- **Objective:** Add an in-memory & local-storage-backed rolling audit log buffer (capped at 50 events) in `background.js` capturing threat detections (timestamp, threat type, severity, host domain), and expose a dedicated "Audit Log & Incident History" table in `options/options.html` and `options/options.js` with CSV/JSON export and clear controls.
+- **Files Affected:**
+  - `background.js`
+  - `options/options.html`
+  - `options/options.js`
+  - `tests/e2e/extension-lifecycle.test.js`
+- **Acceptance Criteria:**
+  - Security threats reported from content script or context menu append structured events to `auditLog` in `chrome.storage.local`.
+  - Options UI renders the audit table with severity badges and allows downloading log file as JSON.
+- **Validation:** `npm run check`, E2E test.
+
+---
+
+### TSK-23: Developer Intranet & Localhost Port Whitelist Expansion
+- **Objective:** Enhance `core/url-analyzer.js` `isDomainWhitelisted` to support port specifications (e.g. `localhost:3000`, `127.0.0.1:8080`, `myapp.local:5173`) and private subnet wildcards (e.g. `192.168.*`, `10.*`), preventing false alarms on local development web servers.
+- **Files Affected:**
+  - `core/url-analyzer.js`
+  - `tests/url-safety.test.js`
+- **Acceptance Criteria:**
+  - Port-specific domain entries match URLs with the corresponding port.
+  - Private IP prefixes match developer intranet hosts.
+- **Validation:** `npm test` with dedicated test suite.
+
 

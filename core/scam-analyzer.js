@@ -242,6 +242,27 @@
         "can't call right now please wire"
       ],
       reason: "Suspected family emergency or impersonation scam targeting urgent money transfers."
+    },
+    {
+      id: "crypto-approval-drainer",
+      category: "Web3 Approval Drainer / Malicious Signature",
+      severity: "critical",
+      keywords: [
+        "permit2 batch",
+        "sign permit2",
+        "permit2 signature",
+        "setapprovalforall",
+        "increaseallowance",
+        "sign eth_sign",
+        "sign this message to verify wallet",
+        "sign message to claim airdrop",
+        "approve unlimited",
+        "unlimited token allowance",
+        "sign gasless transaction to claim",
+        "sign off-chain voucher to receive",
+        "delegatecash verification signature"
+      ],
+      reason: "Dangerous Web3 signature or unlimited contract approval request commonly used by wallet drainers to steal tokens and NFTs without transaction gas."
     }
   ];
 

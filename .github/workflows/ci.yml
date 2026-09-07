@@ -28,3 +28,9 @@ jobs:
 
       - name: Run Test Suite
         run: npm test
+
+      - name: Verify Distribution Packaging
+        run: npm run pack
+
+      - name: Run Headless Browser E2E Tests
+        run: npm run test:e2e

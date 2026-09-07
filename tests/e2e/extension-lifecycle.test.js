@@ -1,0 +1,163 @@
+const { describe, it, before, after } = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const http = require("node:http");
+const path = require("node:path");
+const { HeadlessBrowser, findBrowserPath } = require("./cdp-client.js");
+
+describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
+  const browserPath = findBrowserPath();
+  const hasBrowser = browserPath !== null;
+
+  if (!hasBrowser) {
+    it.skip("skipped because no local Chrome/Edge browser binary was found", () => {});
+    return;
+  }
+
+  let browser;
+  let extensionId;
+  let httpServer;
+  let httpPort;
+
+  before(async () => {
+    // Start local HTTP server to serve test-page.html
+    httpServer = http.createServer((req, res) => {
+      const filePath = path.resolve(__dirname, "../../test-page.html");
+      const html = fs.readFileSync(filePath);
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(html);
+    });
+
+    await new Promise(resolve => {
+      httpServer.listen(0, "127.0.0.1", () => {
+        httpPort = httpServer.address().port;
+        resolve();
+      });
+    });
+
+    browser = new HeadlessBrowser({
+      extensionPath: path.resolve(__dirname, "../..")
+    });
+    await browser.launch();
+    extensionId = await browser.getExtensionId();
+  });
+
+  after(async () => {
+    if (browser) {
+      await browser.close();
+    }
+    if (httpServer) {
+      httpServer.close();
+    }
+  });
+
+  it("loads unpacked extension and activates background service worker", async () => {
+    assert.ok(extensionId, "Expected valid 32-character extension ID");
+    assert.match(extensionId, /^[a-z0-9]{32}$/, `Extension ID "${extensionId}" has invalid format`);
+
+    const targets = await browser.getTargets();
+    const serviceWorkerTarget = targets.find(t => t.type === "service_worker" && (t.url || "").includes(extensionId));
+    assert.ok(serviceWorkerTarget, "Expected active service_worker target in browser DevTools");
+  });
+
+  it("renders options page (options.html) with intact controls and backup utilities", async () => {
+    assert.ok(extensionId);
+    const optionsUrl = `chrome-extension://${extensionId}/options/options.html`;
+    const page = await browser.openPage(optionsUrl);
+
+    await page.waitForFunction(() => document.title && document.title.includes("OSN Guard"));
+
+    const pageData = await page.evaluate(`
+      (() => {
+        return {
+          title: document.title,
+          hasPiiNameInput: Boolean(document.getElementById("new-pii-name")),
+          hasPiiPatternInput: Boolean(document.getElementById("new-pii-pattern")),
+          hasAddPiiBtn: Boolean(document.getElementById("add-pii-btn")),
+          hasWhitelistInput: Boolean(document.getElementById("new-whitelist-domain")),
+          hasAddWhitelistBtn: Boolean(document.getElementById("add-whitelist-btn")),
+          hasExportBtn: Boolean(document.getElementById("export-config-btn")),
+          hasImportInput: Boolean(document.getElementById("import-config-file")),
+          hasResetStatsBtn: Boolean(document.getElementById("reset-stats-btn"))
+        };
+      })()
+    `);
+
+    assert.ok(pageData.title.includes("OSN Guard"), `Unexpected title: ${pageData.title}`);
+    assert.equal(pageData.hasPiiNameInput, true);
+    assert.equal(pageData.hasPiiPatternInput, true);
+    assert.equal(pageData.hasAddPiiBtn, true);
+    assert.equal(pageData.hasWhitelistInput, true);
+    assert.equal(pageData.hasAddWhitelistBtn, true);
+    assert.equal(pageData.hasExportBtn, true);
+    assert.equal(pageData.hasImportInput, true);
+    assert.equal(pageData.hasResetStatsBtn, true);
+
+    page.close();
+  });
+
+  it("renders popup page (popup.html) with score gauge and shield status cards", async () => {
+    assert.ok(extensionId);
+    const popupUrl = `chrome-extension://${extensionId}/popup/popup.html`;
+    const page = await browser.openPage(popupUrl);
+
+    await page.waitForFunction(() => document.title && document.title.includes("OSN Guard"));
+
+    const popupData = await page.evaluate(`
+      (() => {
+        return {
+          title: document.title,
+          hasScoreVal: Boolean(document.getElementById("score-value")),
+          hasStatusText: Boolean(document.getElementById("status-text")),
+          hasPiiShield: Boolean(document.getElementById("shield-pii")),
+          hasUrlShield: Boolean(document.getElementById("shield-url")),
+          hasContentShield: Boolean(document.getElementById("shield-content")),
+          hasSecurityShield: Boolean(document.getElementById("shield-security")),
+          hasOptionsLink: Boolean(document.getElementById("view-options-link")),
+          hasRescanBtn: Boolean(document.getElementById("rescan-btn"))
+        };
+      })()
+    `);
+
+    assert.ok(popupData.title.includes("OSN Guard"));
+    assert.equal(popupData.hasScoreVal, true);
+    assert.equal(popupData.hasStatusText, true);
+    assert.equal(popupData.hasPiiShield, true);
+    assert.equal(popupData.hasUrlShield, true);
+    assert.equal(popupData.hasContentShield, true);
+    assert.equal(popupData.hasSecurityShield, true);
+    assert.equal(popupData.hasOptionsLink, true);
+    assert.equal(popupData.hasRescanBtn, true);
+
+    page.close();
+  });
+
+  it("injects content script and analyzes DOM on interactive pages", async () => {
+    const testPageUrl = `http://127.0.0.1:${httpPort}/test-page.html`;
+    const page = await browser.openPage(testPageUrl);
+
+    // Wait for content script initial scan (content.js has 1000ms initial scan delay)
+    await page.waitForFunction(() => {
+      return document.querySelectorAll("[data-osn-scanned]").length > 0;
+    }, 8000, 200);
+
+    const scanData = await page.evaluate(`
+      (() => {
+        return {
+          urlBadges: document.querySelectorAll("[data-threat-type='url']").length,
+          contentBadges: document.querySelectorAll("[data-threat-type='content']").length,
+          formBadges: document.querySelectorAll("[data-threat-type='security']").length,
+          scannedNodes: document.querySelectorAll("[data-osn-scanned]").length
+        };
+      })()
+    `);
+
+    assert.ok(scanData.scannedNodes > 0, "Content script did not scan any nodes on test-page.html");
+    assert.ok(
+      scanData.urlBadges > 0 || scanData.contentBadges > 0 || scanData.formBadges > 0,
+      `Expected badges on test page, found: ${JSON.stringify(scanData)}`
+    );
+
+    page.close();
+  });
+});

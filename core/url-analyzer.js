@@ -76,7 +76,8 @@
   const SUSPICIOUS_TLDS = new Set([
     ".xyz", ".cc", ".info", ".click", ".top", ".buzz",
     ".work", ".gq", ".tk", ".cf", ".ml", ".ga",
-    ".rest", ".country", ".stream", ".cam", ".monster"
+    ".rest", ".country", ".stream", ".cam", ".monster",
+    ".sbs", ".cfd", ".quest", ".beauty", ".hair", ".skin"
   ]);
 
   // High-risk keywords commonly combined in phishing URLs
@@ -86,8 +87,20 @@
     "airdrop", "wallet-connect", "password-reset", "recover", "billing"
   ];
 
-  // IPv4 regex pattern
+  // IP address regex patterns (IPv4, IPv6, and dword/hex representations)
   const IPV4_PATTERN = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+  const IPV6_PATTERN = /^\[[0-9a-fA-F:]+\]$/;
+  const DWORD_IP_PATTERN = /^(?:0x[0-9a-fA-F]+|\d{8,11})$/;
+
+  /**
+   * Checks if a given hostname is a raw IP address (IPv4, IPv6, or integer notation)
+   * @param {string} host - Hostname string
+   * @returns {boolean}
+   */
+  function isRawIpAddress(host) {
+    if (!host) return false;
+    return IPV4_PATTERN.test(host) || IPV6_PATTERN.test(host) || DWORD_IP_PATTERN.test(host);
+  }
 
   /**
    * Checks if a domain is included in the whitelist
@@ -225,17 +238,22 @@
     // Heuristic Evaluation
     const heuristics = [];
 
-    // Heuristic A: Unencrypted HTTP Protocol
+    // Heuristic A: Embedded credentials / userinfo in URL authority (e.g. https://google.com@attacker.com)
+    if (urlObj.username || urlObj.password) {
+      heuristics.push("Contains embedded credentials or userinfo in URL authority (potential phishing/spoofing)");
+    }
+
+    // Heuristic B: Unencrypted HTTP Protocol
     if (urlObj.protocol === "http:") {
       heuristics.push("Uses unencrypted HTTP protocol");
     }
 
-    // Heuristic B: Raw IP address as hostname
-    if (IPV4_PATTERN.test(domain)) {
+    // Heuristic C: Raw IP address as hostname (IPv4, IPv6, or integer notation)
+    if (isRawIpAddress(domain)) {
       heuristics.push("Hostname is a raw IP address");
     }
 
-    // Heuristic C: Suspicious Top-Level Domain (TLD)
+    // Heuristic D: Suspicious Top-Level Domain (TLD)
     for (const tld of SUSPICIOUS_TLDS) {
       if (domain.endsWith(tld)) {
         heuristics.push(`Uses a suspicious low-cost TLD (${tld})`);
@@ -243,21 +261,40 @@
       }
     }
 
-    // Heuristic D: Phishing keyword combinations in subdomain / path
+    // Heuristic E: Phishing keyword combinations in subdomain / path
     const urlLower = urlString.toLowerCase();
     const matchedKeywords = PHISHING_KEYWORDS.filter(kw => urlLower.includes(kw));
     if (matchedKeywords.length >= 2) {
       heuristics.push(`Contains multiple phishing keywords: ${matchedKeywords.join(", ")}`);
     }
 
-    // Heuristic E: Excessive subdomain nesting (e.g. login.secure.bank.evil.com)
+    // Heuristic F: Excessive subdomain nesting (e.g. login.secure.bank.evil.com)
     const hostParts = domain.split(".");
-    if (hostParts.length >= 5 && !IPV4_PATTERN.test(domain)) {
+    if (hostParts.length >= 5 && !isRawIpAddress(domain)) {
       heuristics.push("Excessive subdomain nesting often used to disguise brand names");
     }
 
+    // Heuristic G: Suspicious open redirect parameter pointing to external hosts
+    const redirectParams = ["redirect", "redirect_url", "redirect_to", "return_to", "url", "dest", "destination", "next", "link", "target", "goto"];
+    for (const [key, val] of urlObj.searchParams.entries()) {
+      if (redirectParams.includes(key.toLowerCase())) {
+        const lowerVal = val.toLowerCase().trim();
+        if (lowerVal.startsWith("http://") || lowerVal.startsWith("https://") || lowerVal.startsWith("//")) {
+          try {
+            const targetUrl = new URL(lowerVal.startsWith("//") ? "https:" + lowerVal : lowerVal);
+            if (targetUrl.hostname && targetUrl.hostname !== domain && !targetUrl.hostname.endsWith("." + domain)) {
+              heuristics.push(`Contains external open redirect parameter (${key}) pointing to ${targetUrl.hostname}`);
+              break;
+            }
+          } catch {
+            // Malformed URL in parameter
+          }
+        }
+      }
+    }
+
     if (heuristics.length > 0) {
-      const isCritical = heuristics.length >= 2 || heuristics.some(h => h.includes("raw IP address"));
+      const isCritical = heuristics.length >= 2 || heuristics.some(h => h.includes("raw IP address") || h.includes("embedded credentials"));
       return {
         safe: false,
         reason: heuristics.join("; "),

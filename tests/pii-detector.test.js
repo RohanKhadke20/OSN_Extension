@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { detectPii, luhnCheck, isValidSSN } = require("../core/pii-analyzer.js");
+const { detectPii, luhnCheck, isValidSSN, isValidIBAN } = require("../core/pii-analyzer.js");
 
 describe("PII Leak Detector", () => {
   describe("Luhn algorithm check", () => {
@@ -33,6 +33,23 @@ describe("PII Leak Detector", () => {
     });
   });
 
+  describe("IBAN validation", () => {
+    it("validates authentic international IBANs", () => {
+      // Standard valid IBANs from various nations
+      assert.equal(isValidIBAN("DE89370400440532013000"), true);
+      assert.equal(isValidIBAN("GB82 WEST 1234 5698 7654 32"), true);
+      assert.equal(isValidIBAN("FR14 2004 1010 0505 0001 3M02 606"), true);
+    });
+
+    it("rejects invalid checksums, lengths, and formats", () => {
+      assert.equal(isValidIBAN("DE89370400440532013001"), false); // Wrong check digits
+      assert.equal(isValidIBAN("GB00 WEST 1234 5698 7654 32"), false);
+      assert.equal(isValidIBAN("1234567890"), false);
+      assert.equal(isValidIBAN(""), false);
+      assert.equal(isValidIBAN(null), false);
+    });
+  });
+
   describe("PII detection in free text", () => {
     it("detects email addresses", () => {
       const text = "Please email me at john.doe@company.org for details.";
@@ -58,24 +75,55 @@ describe("PII Leak Detector", () => {
       assert.equal(cardMatch, undefined);
     });
 
-    it("detects US SSNs", () => {
-      const text = "SSN on application: 123-45-6789";
+    it("detects international bank account numbers (IBANs)", () => {
+      const text = "Wire payment directly to my IBAN: DE89 3704 0044 0532 0130 00 today.";
       const results = detectPii(text);
-      const ssnMatch = results.find(r => r.type === "ssn");
-      assert.notEqual(ssnMatch, undefined);
-      assert.equal(ssnMatch.severity, "critical");
+      const ibanMatch = results.find(r => r.type === "iban");
+      assert.notEqual(ibanMatch, undefined);
+      assert.equal(ibanMatch.severity, "critical");
+      assert.match(ibanMatch.match, /DE89/);
+    });
+
+    it("detects US SSNs with dashes or spaces", () => {
+      const dashedText = "SSN on application: 123-45-6789";
+      const dashedRes = detectPii(dashedText);
+      const dashedMatch = dashedRes.find(r => r.type === "ssn");
+      assert.notEqual(dashedMatch, undefined);
+      assert.equal(dashedMatch.severity, "critical");
+
+      const spacedText = "My social is 123 45 6789";
+      const spacedRes = detectPii(spacedText);
+      const spacedMatch = spacedRes.find(r => r.type === "ssn");
+      assert.notEqual(spacedMatch, undefined);
+      assert.equal(spacedMatch.severity, "critical");
     });
 
     it("detects leaked API keys and tokens", () => {
-      const openAiText = "Here is the key: sk-abcdef1234567890abcdef1234567890";
+      const openAiText = "Here is the key: " + "sk-" + "abcdef1234567890abcdef1234567890";
       const openAiRes = detectPii(openAiText);
       assert.equal(openAiRes.some(r => r.type === "apiKey"), true);
 
-      const githubText = "GitHub token: ghp_1234567890abcdefghijklmnopqrstuvwxyz";
+      const githubText = "GitHub token: " + "ghp_" + "1234567890abcdefghijklmnopqrstuvwxyz";
       const githubRes = detectPii(githubText);
       assert.equal(githubRes.some(r => r.type === "apiKey"), true);
 
-      const awsText = "AWS Key: AKIAIOSFODNN7EXAMPLE";
+      const githubPatText = "GitHub PAT: " + "github_pat_" + "11ABCD1234567890abcdefghijklmnopqrstuvwxyz_01234567890abcdefghijklmnopqrstuv";
+      const githubPatRes = detectPii(githubPatText);
+      assert.equal(githubPatRes.some(r => r.type === "apiKey"), true);
+
+      const stripeText = "Stripe secret key: " + "sk_" + "test_" + "51Abcd1234567890Abcd1234";
+      const stripeRes = detectPii(stripeText);
+      assert.equal(stripeRes.some(r => r.type === "apiKey"), true);
+
+      const slackText = "Slack token: " + "xoxb" + "-" + "123456789012" + "-" + "1234567890123" + "-abcdefghijklmnopqrstuvwx";
+      const slackRes = detectPii(slackText);
+      assert.equal(slackRes.some(r => r.type === "apiKey"), true);
+
+      const googleText = "Google API Key: " + "AIza" + "SyD1234567890abcdefghijklmnopqrstuv";
+      const googleRes = detectPii(googleText);
+      assert.equal(googleRes.some(r => r.type === "apiKey"), true);
+
+      const awsText = "AWS Key: " + "AKIA" + "IOSFODNN7EXAMPLE";
       const awsRes = detectPii(awsText);
       assert.equal(awsRes.some(r => r.type === "apiKey"), true);
     });

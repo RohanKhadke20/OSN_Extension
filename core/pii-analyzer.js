@@ -71,6 +71,38 @@
   }
 
   /**
+   * Validates an International Bank Account Number (IBAN) using ISO 7064 Mod-97
+   * @param {string} ibanStr - Raw IBAN string
+   * @returns {boolean}
+   */
+  function isValidIBAN(ibanStr) {
+    if (!ibanStr || typeof ibanStr !== "string") return false;
+    const clean = ibanStr.replace(/[\s-]/g, "").toUpperCase();
+    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(clean)) {
+      return false;
+    }
+    // Rearrange: move country code and check digits to the end
+    const rearranged = clean.slice(4) + clean.slice(0, 4);
+    // Expand letters to digits (A=10, ..., Z=35)
+    let numericStr = "";
+    for (let i = 0; i < rearranged.length; i++) {
+      const code = rearranged.charCodeAt(i);
+      if (code >= 65 && code <= 90) {
+        numericStr += (code - 55).toString();
+      } else {
+        numericStr += rearranged.charAt(i);
+      }
+    }
+    // Piece-wise mod 97 to avoid 64-bit float precision errors
+    let remainder = 0;
+    for (let i = 0; i < numericStr.length; i += 7) {
+      const chunk = remainder.toString() + numericStr.substring(i, i + 7);
+      remainder = parseInt(chunk, 10) % 97;
+    }
+    return remainder === 1;
+  }
+
+  /**
    * Standard PII pattern definitions
    */
   const BUILTIN_PATTERNS = [
@@ -93,18 +125,26 @@
       }
     },
     {
+      type: "iban",
+      name: "Bank Account (IBAN)",
+      severity: "critical",
+      // Matches international IBAN structures with optional spaces/dashes
+      regex: /\b[A-Z]{2}\d{2}(?:[ -]?[A-Z0-9]{4}){2,7}(?:[ -]?[A-Z0-9]{1,4})?\b/gi,
+      validate: (match) => isValidIBAN(match)
+    },
+    {
       type: "ssn",
       name: "Social Security Number",
       severity: "critical",
-      regex: /\b\d{3}-\d{2}-\d{4}\b/g,
+      regex: /\b\d{3}[- ]\d{2}[- ]\d{4}\b/g,
       validate: (match) => isValidSSN(match)
     },
     {
       type: "apiKey",
       name: "API Secret / Token",
       severity: "critical",
-      // Detects OpenAI, Anthropic, GitHub tokens, AWS keys, and private keys
-      regex: /\b(?:sk-[a-zA-Z0-9]{20,}|sk-ant-[a-zA-Z0-9-]{20,}|(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}|AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)\b/g
+      // Detects OpenAI, Anthropic, GitHub classic & PAT, Stripe, Slack, Google API, AWS keys, and private keys
+      regex: /\b(?:sk-[a-zA-Z0-9]{20,}|sk-ant-[a-zA-Z0-9-]{20,}|(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}|github_pat_[A-Za-z0-9_]{60,95}|(?:sk|rk)_(?:live|test)_[a-zA-Z0-9]{24,}|xox[baprs]-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24,}|AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)\b/g
     },
     {
       type: "phoneNumber",
@@ -203,6 +243,7 @@
     detectPii,
     luhnCheck,
     isValidSSN,
+    isValidIBAN,
     BUILTIN_PATTERNS
   };
 });

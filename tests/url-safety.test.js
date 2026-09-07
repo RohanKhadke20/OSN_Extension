@@ -51,17 +51,35 @@ describe("URL Safety Analyzer", () => {
     }
   });
 
-  it("flags raw IP address hostnames", () => {
+  it("flags raw IP address hostnames including IPv4, IPv6, and dword formats", () => {
     const ipUrls = [
       "http://192.168.1.100/admin",
       "https://45.33.32.156/setup",
-      "http://10.0.0.1"
+      "http://10.0.0.1",
+      "http://[::1]/debug",
+      "https://[2001:db8::1]/status",
+      "http://2130706433/gateway"
     ];
 
     for (const url of ipUrls) {
       const result = analyzeUrlSafety(url);
       assert.equal(result.safe, false, `Expected ${url} to be flagged for IP address`);
       assert.match(result.reason, /raw IP address/i);
+    }
+  });
+
+  it("flags embedded credentials and userinfo in URL authority", () => {
+    const spoofedUrls = [
+      "https://google.com@phishing-target.com/login",
+      "https://paypal.com:account-security@attacker-domain.org",
+      "http://admin:pass@rogue-server.net"
+    ];
+
+    for (const url of spoofedUrls) {
+      const result = analyzeUrlSafety(url);
+      assert.equal(result.safe, false, `Expected ${url} to be flagged for embedded credentials`);
+      assert.equal(result.severity, "critical");
+      assert.match(result.reason, /credentials/i);
     }
   });
 
@@ -73,11 +91,19 @@ describe("URL Safety Analyzer", () => {
     assert.match(result.reason, /HTTP protocol/i);
   });
 
-  it("flags suspicious TLDs", () => {
-    const tldUrl = "https://freeprizes.xyz";
-    const result = analyzeUrlSafety(tldUrl);
-    assert.equal(result.safe, false);
-    assert.match(result.reason, /suspicious low-cost TLD/i);
+  it("flags suspicious TLDs including modern disposable domains", () => {
+    const tldUrls = [
+      "https://freeprizes.xyz",
+      "https://crypto-claim.sbs",
+      "https://fast-payout.cfd",
+      "https://luxury-gift.beauty"
+    ];
+
+    for (const url of tldUrls) {
+      const result = analyzeUrlSafety(url);
+      assert.equal(result.safe, false, `Expected ${url} to be flagged for suspicious TLD`);
+      assert.match(result.reason, /suspicious low-cost TLD/i);
+    }
   });
 
   it("flags combination of phishing keywords on unknown domains", () => {
@@ -85,6 +111,13 @@ describe("URL Safety Analyzer", () => {
     const result = analyzeUrlSafety(phishUrl);
     assert.equal(result.safe, false);
     assert.match(result.reason, /phishing keywords/i);
+  });
+
+  it("flags potential open redirect parameters pointing to external hosts", () => {
+    const redirectUrl = "https://obscure-portal.org/login?redirect=https://evil-phish.com/harvest";
+    const result = analyzeUrlSafety(redirectUrl);
+    assert.equal(result.safe, false);
+    assert.match(result.reason, /open redirect/i);
   });
 
   it("honors user whitelist properly", () => {

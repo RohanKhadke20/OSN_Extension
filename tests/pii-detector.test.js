@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { detectPii, luhnCheck, isValidSSN, isValidIBAN } = require("../core/pii-analyzer.js");
+const { detectPii, maskPii, luhnCheck, isValidSSN, isValidIBAN } = require("../core/pii-analyzer.js");
 
 describe("PII Leak Detector", () => {
   describe("Luhn algorithm check", () => {
@@ -166,6 +166,70 @@ describe("PII Leak Detector", () => {
       const text = "Hello everyone! Loving the weather today in San Francisco.";
       const results = detectPii(text);
       assert.equal(results.length, 0);
+    });
+
+    it("detects JWT tokens, database URIs, and card CVVs", () => {
+      // JWT Bearer token
+      const jwtStr = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+      const jwtRes = detectPii("Auth Header: Bearer " + jwtStr);
+      const jwtMatch = jwtRes.find(r => r.type === "jwt");
+      assert.notEqual(jwtMatch, undefined);
+      assert.equal(jwtMatch.severity, "critical");
+
+      // Database URI with credentials
+      const dbText = "Connecting with postgres://dbuser:SecretPass99@db.prod.internal:5432/appdb";
+      const dbRes = detectPii(dbText);
+      const dbMatch = dbRes.find(r => r.type === "dbUri");
+      assert.notEqual(dbMatch, undefined);
+      assert.equal(dbMatch.severity, "critical");
+
+      // Mongo connection string
+      const mongoText = "URI: mongodb+srv://admin:MockPass88@cluster0.abcde.mongodb.net/production";
+      const mongoRes = detectPii(mongoText);
+      const mongoMatch = mongoRes.find(r => r.type === "dbUri");
+      assert.notEqual(mongoMatch, undefined);
+
+      // Card Security Code (CVV / CVC)
+      const cvvText = "Card valid thru 12/28, CVV: 789";
+      const cvvRes = detectPii(cvvText);
+      const cvvMatch = cvvRes.find(r => r.type === "cvv");
+      assert.notEqual(cvvMatch, undefined);
+      assert.equal(cvvMatch.severity, "critical");
+    });
+
+    it("detects expanded private key formats (PGP, DSA, ENCRYPTED)", () => {
+      const pgpText = "-----BEGIN PGP PRIVATE KEY BLOCK-----\nVersion: GnuPG v2.0\n...";
+      const pgpRes = detectPii(pgpText);
+      assert.equal(pgpRes.some(r => r.type === "apiKey"), true);
+
+      const dsaText = "-----BEGIN DSA PRIVATE KEY-----\nMIIBvAIBAAKCAQEA...";
+      const dsaRes = detectPii(dsaText);
+      assert.equal(dsaRes.some(r => r.type === "apiKey"), true);
+
+      const encText = "-----BEGIN ENCRYPTED PRIVATE KEY-----\nMIIFDjBABgkqhkiG9w0BBQ0w...";
+      const encRes = detectPii(encText);
+      assert.equal(encRes.some(r => r.type === "apiKey"), true);
+    });
+
+    it("masks sensitive PII data accurately with maskPii", () => {
+      const emailText = "Contact user@example.com for assistance.";
+      const maskedEmail = maskPii(emailText);
+      assert.equal(maskedEmail, "Contact u***r@example.com for assistance.");
+
+      const cardText = "Card number 4532 0151 1283 0234 charged.";
+      const maskedCard = maskPii(cardText);
+      assert.equal(maskedCard, "Card number ****-****-****-0234 charged.");
+
+      const ssnText = "SSN is 123-45-6789 on file.";
+      const maskedSsn = maskPii(ssnText);
+      assert.equal(maskedSsn, "SSN is ***-**-6789 on file.");
+
+      const secretText = "API secret is " + "sk-" + "abcdef1234567890abcdef1234567890.";
+      const maskedSecret = maskPii(secretText);
+      assert.match(maskedSecret, /\[REDACTED_API_SECRET___TOKEN\]/);
+
+      const safeText = "Totally benign message with nothing private.";
+      assert.equal(maskPii(safeText), safeText);
     });
   });
 });

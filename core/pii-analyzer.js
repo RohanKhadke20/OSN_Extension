@@ -104,13 +104,30 @@
 
   /**
    * Standard PII pattern definitions
+   * Prioritized so that compound tokens (e.g. db connection URIs with embedded user credentials,
+   * credit cards, JWTs) are evaluated before more generic sub-patterns (email, phone numbers).
    */
   const BUILTIN_PATTERNS = [
     {
-      type: "email",
-      name: "Email Address",
-      severity: "warning",
-      regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+      type: "dbUri",
+      name: "Database URI with Credentials",
+      severity: "critical",
+      // Detects database connection strings containing user:password credentials
+      regex: /\b(?:postgres(?:ql)?|mongodb(?:\+srv)?|mysql|redis|mssql):\/\/[^\s:@/]+:[^\s:@/]+@[^\s/:]+(?::\d+)?\/[^\s]*\b/gi
+    },
+    {
+      type: "apiKey",
+      name: "API Secret / Token",
+      severity: "critical",
+      // Detects OpenAI, Anthropic, GitHub classic & PAT, Stripe, Slack, Google API, AWS keys, and private keys
+      regex: /(?:\b(?:sk-[a-zA-Z0-9]{20,}|sk-ant-[a-zA-Z0-9-]{20,}|(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}|github_pat_[A-Za-z0-9_]{60,95}|(?:sk|rk)_(?:live|test)_[a-zA-Z0-9]{24,}|xox[baprs]-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24,}|AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16})\b|-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----)/g
+    },
+    {
+      type: "jwt",
+      name: "Auth Token (JWT)",
+      severity: "critical",
+      // Detects standard three-segment JSON Web Tokens with base64url encoding
+      regex: /\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b/g
     },
     {
       type: "creditCard",
@@ -140,11 +157,21 @@
       validate: (match) => isValidSSN(match)
     },
     {
-      type: "apiKey",
-      name: "API Secret / Token",
+      type: "cvv",
+      name: "Card Security Code (CVV/CVC)",
       severity: "critical",
-      // Detects OpenAI, Anthropic, GitHub classic & PAT, Stripe, Slack, Google API, AWS keys, and private keys
-      regex: /\b(?:sk-[a-zA-Z0-9]{20,}|sk-ant-[a-zA-Z0-9-]{20,}|(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}|github_pat_[A-Za-z0-9_]{60,95}|(?:sk|rk)_(?:live|test)_[a-zA-Z0-9]{24,}|xox[baprs]-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24,}|AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)\b/g
+      // Detects CVV/CVC labels followed by 3-4 security digits
+      regex: /\b(?:cvv2?|cvc2?|cid|security code)\s*[:=]?\s*([0-9]{3,4})\b/gi,
+      validate: (match) => {
+        const digits = match.replace(/\D/g, "");
+        return digits.length >= 3 && digits.length <= 4 && !/^0+$/.test(digits);
+      }
+    },
+    {
+      type: "email",
+      name: "Email Address",
+      severity: "warning",
+      regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
     },
     {
       type: "phoneNumber",
@@ -239,8 +266,55 @@
     return detected;
   }
 
+  /**
+   * Masks detected sensitive PII and secrets in a text string for safe logging/display
+   * @param {string} text - Raw input text
+   * @param {Array<{name: string, pattern: string, severity?: string}>} customPatterns - Optional user patterns
+   * @returns {string} - Masked text
+   */
+  function maskPii(text, customPatterns = []) {
+    if (!text || typeof text !== "string") return "";
+    const detected = detectPii(text, customPatterns);
+    if (detected.length === 0) return text;
+
+    let masked = text;
+    for (const item of detected) {
+      const match = item.match;
+      if (!match) continue;
+
+      let replacement;
+      if (item.type === "email") {
+        const parts = match.split("@");
+        if (parts.length === 2 && parts[0].length > 2) {
+          replacement = parts[0][0] + "***" + parts[0].slice(-1) + "@" + parts[1];
+        } else {
+          replacement = "***@" + (parts[1] || "***");
+        }
+      } else if (item.type === "creditCard") {
+        const cleanDigits = match.replace(/[\s-]/g, "");
+        const last4 = cleanDigits.slice(-4);
+        replacement = "****-****-****-" + last4;
+      } else if (item.type === "ssn") {
+        const cleanDigits = match.replace(/\D/g, "");
+        replacement = "***-**-" + cleanDigits.slice(-4);
+      } else if (item.type === "phoneNumber") {
+        const cleanDigits = match.replace(/\D/g, "");
+        replacement = "***-***-" + cleanDigits.slice(-4);
+      } else if (item.type === "iban") {
+        const cleanIban = match.replace(/[\s-]/g, "");
+        replacement = cleanIban.slice(0, 4) + " **** **** " + cleanIban.slice(-4);
+      } else {
+        replacement = `[REDACTED_${item.name.toUpperCase().replace(/[^A-Z0-9]/g, "_")}]`;
+      }
+
+      masked = masked.split(match).join(replacement);
+    }
+    return masked;
+  }
+
   return {
     detectPii,
+    maskPii,
     luhnCheck,
     isValidSSN,
     isValidIBAN,

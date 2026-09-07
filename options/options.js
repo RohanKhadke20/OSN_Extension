@@ -23,6 +23,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const exportConfigBtn = document.getElementById("export-config-btn");
   const importConfigFile = document.getElementById("import-config-file");
 
+  // Live PII Sandbox Elements
+  const sandboxInput = document.getElementById("sandbox-input-text");
+  const sandboxOutput = document.getElementById("sandbox-output-text");
+  const copySanitizedBtn = document.getElementById("copy-sanitized-btn");
+  const sandboxFindings = document.getElementById("sandbox-findings");
+
   // Stats Elements
   const optStatLinks = document.getElementById("opt-stat-links");
   const optStatPii = document.getElementById("opt-stat-pii");
@@ -87,6 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderPiiRules();
       renderWhitelist();
       renderStats(data.stats);
+      updateSandbox();
     });
   };
 
@@ -151,6 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
     localPiiRules = localPiiRules.filter(r => r.id !== ruleId);
     chrome.storage.local.set({ customPiiPatterns: localPiiRules }, () => {
       renderPiiRules();
+      updateSandbox();
       triggerSuccessAlert("PII rule deleted.");
     });
   };
@@ -191,6 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
       newPiiName.value = "";
       newPiiPattern.value = "";
       renderPiiRules();
+      updateSandbox();
       triggerSuccessAlert(`Added PII rule "${name}".`);
     });
   });
@@ -426,6 +435,88 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
   });
+
+  // Live PII Sandbox Analysis & Sanitization
+  const updateSandbox = () => {
+    if (!sandboxInput || !sandboxOutput) return;
+    const raw = sandboxInput.value;
+    if (!raw || raw.trim().length === 0) {
+      sandboxOutput.value = "";
+      if (sandboxFindings) sandboxFindings.replaceChildren();
+      return;
+    }
+
+    if (typeof OSNPiiAnalyzer !== "undefined" && OSNPiiAnalyzer.maskPii) {
+      const masked = OSNPiiAnalyzer.maskPii(raw, localPiiRules);
+      const detected = OSNPiiAnalyzer.detectPii(raw, localPiiRules);
+      sandboxOutput.value = masked;
+
+      if (sandboxFindings) {
+        sandboxFindings.replaceChildren();
+        if (detected.length > 0) {
+          const counts = {};
+          detected.forEach(d => {
+            counts[d.name] = (counts[d.name] || 0) + 1;
+          });
+          const summaryParts = Object.entries(counts).map(([name, count]) => `${count} ${name}`);
+
+          const badge = document.createElement("span");
+          badge.style.cssText = "color: #f59e0b; font-weight: 600;";
+          badge.textContent = `⚠ Redacted ${detected.length} item(s): `;
+
+          const detailsText = document.createTextNode(summaryParts.join(", "));
+          sandboxFindings.appendChild(badge);
+          sandboxFindings.appendChild(detailsText);
+        } else {
+          const safeBadge = document.createElement("span");
+          safeBadge.style.cssText = "color: #10b981; font-weight: 600;";
+          safeBadge.textContent = "✓ No sensitive PII detected in sample text.";
+          sandboxFindings.appendChild(safeBadge);
+        }
+      }
+    } else {
+      sandboxOutput.value = raw;
+    }
+  };
+
+  if (sandboxInput) {
+    sandboxInput.addEventListener("input", updateSandbox);
+  }
+
+  function copyTextToClipboard(text, btn) {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      }).catch(() => {
+        fallbackCopy();
+      });
+    } else {
+      fallbackCopy();
+    }
+
+    function fallbackCopy() {
+      if (sandboxOutput) {
+        sandboxOutput.select();
+        try {
+          document.execCommand("copy");
+          const orig = btn.textContent;
+          btn.textContent = "Copied!";
+          setTimeout(() => { btn.textContent = orig; }, 1500);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  if (copySanitizedBtn && sandboxOutput) {
+    copySanitizedBtn.addEventListener("click", () => {
+      copyTextToClipboard(sandboxOutput.value, copySanitizedBtn);
+    });
+  }
 
   // Load initially
   loadConfig();

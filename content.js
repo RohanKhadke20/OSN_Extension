@@ -146,14 +146,128 @@
     }
   });
 
-  // Listen for background commands (e.g. manual rescan request)
+  // Listen for background commands (e.g. manual rescan request or context-menu scan results)
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "triggerRescan") {
       rescanPage();
       sendResponse({ status: "success", threatCount: pageThreats.length });
       return true;
+    } else if (message.action === "displayScanResult") {
+      handleScanResultToast(message);
+      sendResponse({ status: "success" });
+      return true;
     }
   });
+
+  function handleScanResultToast(message) {
+    if (message.targetType === "link") {
+      const result = message.result || {};
+      const urlText = (message.targetValue || "").length > 45
+        ? message.targetValue.slice(0, 42) + "..."
+        : (message.targetValue || "Target URL");
+
+      if (result.safe) {
+        showToastNotification({
+          title: "Link Verified Safe",
+          message: `${urlText} passed all safety checks.`,
+          severity: "safe"
+        });
+      } else {
+        const isCritical = result.severity === "critical";
+        showToastNotification({
+          title: isCritical ? "Dangerous Link Blocked" : "Suspicious Link Warning",
+          message: `${result.reason || "Safety threat detected"} (${urlText})`,
+          severity: result.severity || "warning"
+        });
+      }
+    } else if (message.targetType === "selection") {
+      const scam = message.scamResult || {};
+      const pii = Array.isArray(message.piiResult) ? message.piiResult : [];
+
+      if (scam.flagged && pii.length > 0) {
+        const piiTypes = [...new Set(pii.map(p => p.name))].join(", ");
+        showToastNotification({
+          title: "Scam & Sensitive PII Detected",
+          message: `${scam.category || "Scam lure"} detected with unmasked ${piiTypes}.`,
+          severity: "critical"
+        });
+      } else if (scam.flagged) {
+        showToastNotification({
+          title: scam.category || "Scam Detected",
+          message: scam.reason || "Content matches known fraud patterns.",
+          severity: scam.severity || "warning"
+        });
+      } else if (pii.length > 0) {
+        const piiTypes = [...new Set(pii.map(p => p.name))].join(", ");
+        showToastNotification({
+          title: "Sensitive PII Detected",
+          message: `Identified ${pii.length} item(s): ${piiTypes}. Avoid sharing publicly.`,
+          severity: pii[0].severity || "warning"
+        });
+      } else {
+        showToastNotification({
+          title: "Content Inspection Passed",
+          message: "No fraud lures or sensitive personal information identified in selected text.",
+          severity: "safe"
+        });
+      }
+    }
+  }
+
+  function showToastNotification({ title, message, severity = "info", duration = 6000 }) {
+    let container = document.getElementById("osn-guard-toast-container");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "osn-guard-toast-container";
+      container.className = "osn-guard-toast-container";
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `osn-guard-toast osn-guard-toast-${severity}`;
+
+    const icon = document.createElement("span");
+    icon.className = `osn-guard-toast-icon ${severity}`;
+    icon.textContent = severity === "critical" ? "✕" : (severity === "warning" ? "!" : "✓");
+
+    const content = document.createElement("div");
+    content.className = "osn-guard-toast-content";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "osn-guard-toast-title";
+    titleEl.textContent = title;
+
+    const messageEl = document.createElement("div");
+    messageEl.className = "osn-guard-toast-message";
+    messageEl.textContent = message;
+
+    content.appendChild(titleEl);
+    content.appendChild(messageEl);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "osn-guard-toast-close";
+    closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", "Close notification");
+    closeBtn.onclick = () => {
+      toast.classList.add("osn-guard-toast-fadeout");
+      setTimeout(() => toast.remove(), 200);
+    };
+
+    toast.appendChild(icon);
+    toast.appendChild(content);
+    toast.appendChild(closeBtn);
+
+    container.appendChild(toast);
+
+    if (duration > 0) {
+      setTimeout(() => {
+        if (toast.isConnected) {
+          toast.classList.add("osn-guard-toast-fadeout");
+          setTimeout(() => toast.remove(), 200);
+        }
+      }, duration);
+    }
+  }
 
   function rescanPage() {
     cancelScheduledBatches();
@@ -192,6 +306,8 @@
     clearAllContentBadges();
     clearAllFormBadges();
     hideSharedTooltip();
+    const toastContainer = document.getElementById("osn-guard-toast-container");
+    if (toastContainer) toastContainer.remove();
   }
 
   // Initialize Scanner

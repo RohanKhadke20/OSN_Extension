@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { HeadlessBrowser, findBrowserPath } = require("./cdp-client.js");
+const { HeadlessBrowser, CdpPage, findBrowserPath } = require("./cdp-client.js");
 
 describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
   const browserPath = findBrowserPath();
@@ -78,7 +78,11 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
           hasAddWhitelistBtn: Boolean(document.getElementById("add-whitelist-btn")),
           hasExportBtn: Boolean(document.getElementById("export-config-btn")),
           hasImportInput: Boolean(document.getElementById("import-config-file")),
-          hasResetStatsBtn: Boolean(document.getElementById("reset-stats-btn"))
+          hasResetStatsBtn: Boolean(document.getElementById("reset-stats-btn")),
+          hasSandboxInput: Boolean(document.getElementById("sandbox-input-text")),
+          hasSandboxOutput: Boolean(document.getElementById("sandbox-output-text")),
+          hasCopySanitizedBtn: Boolean(document.getElementById("copy-sanitized-btn")),
+          hasSandboxFindings: Boolean(document.getElementById("sandbox-findings"))
         };
       })()
     `);
@@ -92,6 +96,24 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
     assert.equal(pageData.hasExportBtn, true);
     assert.equal(pageData.hasImportInput, true);
     assert.equal(pageData.hasResetStatsBtn, true);
+    assert.equal(pageData.hasSandboxInput, true);
+    assert.equal(pageData.hasSandboxOutput, true);
+    assert.equal(pageData.hasCopySanitizedBtn, true);
+    assert.equal(pageData.hasSandboxFindings, true);
+
+    // Verify live PII sandbox sanitizes input text in real time
+    const sanitizedOutput = await page.evaluate(`
+      (() => {
+        const input = document.getElementById("sandbox-input-text");
+        const output = document.getElementById("sandbox-output-text");
+        input.value = "Contact me at alice@testcompany.org or 4111 1111 1111 1111.";
+        input.dispatchEvent(new Event("input"));
+        return output.value;
+      })()
+    `);
+
+    assert.ok(sanitizedOutput.includes("a***e@testcompany.org"), `Expected masked email, got: ${sanitizedOutput}`);
+    assert.ok(sanitizedOutput.includes("****-****-****-1111"), `Expected masked card, got: ${sanitizedOutput}`);
 
     page.close();
   });
@@ -157,6 +179,53 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
       scanData.urlBadges > 0 || scanData.contentBadges > 0 || scanData.formBadges > 0,
       `Expected badges on test page, found: ${JSON.stringify(scanData)}`
     );
+
+    // Verify scan result toast dispatch to content script
+    const targets = await browser.getTargets();
+    const swTarget = targets.find(t => t.type === "service_worker" && (t.url || "").includes(extensionId));
+    if (swTarget && swTarget.webSocketDebuggerUrl) {
+      const swClient = new CdpPage(swTarget.webSocketDebuggerUrl);
+      await swClient.connect();
+      await swClient.evaluate(`
+        new Promise((resolve) => {
+          chrome.tabs.query({ url: "${testPageUrl}" }, (tabs) => {
+            if (tabs && tabs.length > 0) {
+              chrome.tabs.sendMessage(tabs[0].id, {
+                action: "displayScanResult",
+                targetType: "link",
+                targetValue: "https://win-iphone-now.xyz",
+                result: {
+                  safe: false,
+                  reason: "Matched known phishing/malicious database pattern",
+                  severity: "critical"
+                }
+              }, resolve);
+            } else {
+              resolve();
+            }
+          });
+        })
+      `);
+      swClient.close();
+
+      await page.waitForFunction(() => {
+        return Boolean(document.getElementById("osn-guard-toast-container"));
+      }, 6000, 150);
+
+      const toastData = await page.evaluate(`
+        (() => {
+          const toast = document.querySelector(".osn-guard-toast");
+          const title = toast ? toast.querySelector(".osn-guard-toast-title")?.textContent : "";
+          const msg = toast ? toast.querySelector(".osn-guard-toast-message")?.textContent : "";
+          const hasClose = Boolean(toast ? toast.querySelector(".osn-guard-toast-close") : false);
+          return { exists: Boolean(toast), title, msg, hasClose };
+        })()
+      `);
+
+      assert.equal(toastData.exists, true, "Toast did not appear after displayScanResult");
+      assert.match(toastData.title, /dangerous link/i);
+      assert.equal(toastData.hasClose, true);
+    }
 
     page.close();
   });

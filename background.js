@@ -1,13 +1,34 @@
 // Background service worker for OSN Guard (Manifest V3)
-importScripts("core/url-analyzer.js");
+importScripts("core/url-analyzer.js", "core/pii-analyzer.js", "core/scam-analyzer.js");
 
 // Storage adapter prioritizing session storage for ephemeral tab state
 const getSessionStorage = () => {
   return chrome.storage && chrome.storage.session ? chrome.storage.session : chrome.storage.local;
 };
 
+// Set up Chrome context menus for on-demand inspection
+function setupContextMenus() {
+  if (!chrome.contextMenus) return;
+
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: "osn_scan_link",
+      title: "Scan link with OSN Guard",
+      contexts: ["link"]
+    });
+
+    chrome.contextMenus.create({
+      id: "osn_scan_selection",
+      title: "Analyze selection for scams & PII",
+      contexts: ["selection"]
+    });
+  });
+}
+
 // Initialize default settings on install or update
 chrome.runtime.onInstalled.addListener(() => {
+  setupContextMenus();
+
   chrome.storage.local.get(["shields", "stats", "whitelistedDomains", "customPiiPatterns"], (data) => {
     const defaults = {};
 
@@ -179,4 +200,59 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   const tabKey = `tab_${tabId}`;
   getSessionStorage().remove(tabKey);
 });
+
+// Handle context menu clicks for link and selection scanning
+if (typeof chrome !== "undefined" && chrome.contextMenus && chrome.contextMenus.onClicked) {
+  chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (!tab || !tab.id) return;
+
+    if (info.menuItemId === "osn_scan_link" && info.linkUrl) {
+      chrome.storage.local.get("whitelistedDomains", (data) => {
+        const whitelist = data.whitelistedDomains || [];
+        let result = { safe: false, reason: "URL safety analyzer unavailable" };
+        if (typeof OSNUrlAnalyzer !== "undefined" && OSNUrlAnalyzer.analyzeUrlSafety) {
+          result = OSNUrlAnalyzer.analyzeUrlSafety(info.linkUrl, whitelist);
+        }
+
+        chrome.tabs.sendMessage(tab.id, {
+          action: "displayScanResult",
+          targetType: "link",
+          targetValue: info.linkUrl,
+          result: result
+        }, () => {
+          if (chrome.runtime.lastError) {
+            // Ignored if content script is not yet active on the tab
+          }
+        });
+      });
+    } else if (info.menuItemId === "osn_scan_selection" && info.selectionText) {
+      chrome.storage.local.get("customPiiPatterns", (data) => {
+        const customPatterns = data.customPiiPatterns || [];
+        let scamResult = { flagged: false };
+        let piiResult = [];
+
+        if (typeof OSNScamAnalyzer !== "undefined" && OSNScamAnalyzer.detectScamContent) {
+          scamResult = OSNScamAnalyzer.detectScamContent(info.selectionText);
+        }
+
+        if (typeof OSNPiiAnalyzer !== "undefined" && OSNPiiAnalyzer.detectPii) {
+          piiResult = OSNPiiAnalyzer.detectPii(info.selectionText, customPatterns);
+        }
+
+        chrome.tabs.sendMessage(tab.id, {
+          action: "displayScanResult",
+          targetType: "selection",
+          targetValue: info.selectionText,
+          scamResult: scamResult,
+          piiResult: piiResult
+        }, () => {
+          if (chrome.runtime.lastError) {
+            // Ignored if content script is not yet active on the tab
+          }
+        });
+      });
+    }
+  });
+}
+
 

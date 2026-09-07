@@ -5,7 +5,8 @@
   "description": "Protects your privacy and safety on social networks by scanning for PII leaks, phishing links, scams, and insecure configurations.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "contextMenus"
   ],
   "host_permissions": [
     "<all_urls>"

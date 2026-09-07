@@ -264,6 +264,29 @@
         </div>
       </section>
 
+      <!-- Live PII Redactor & Sanitizer Sandbox -->
+      <section class="settings-group">
+        <h3><span>🛡️</span> Live PII Redactor & Sanitizer Sandbox</h3>
+        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+          Test your custom regex rules and built-in privacy filters against sample text in real time. View redactions and copy sanitized outputs.
+        </p>
+
+        <div class="form-row">
+          <label for="sandbox-input-text">Input Text to Inspect</label>
+          <textarea id="sandbox-input-text" class="input-field" rows="3" style="resize:vertical;" placeholder="Paste sample text containing emails, credit cards, phones, SSNs, or custom regex matches..."></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; margin-bottom: 4px;">
+          <label for="sandbox-output-text" style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">Sanitized Output</label>
+          <button id="copy-sanitized-btn" class="action-btn secondary" style="height: 28px; font-size: 11px; padding: 0 10px;">Copy Sanitized</button>
+        </div>
+        <textarea id="sandbox-output-text" class="input-field" rows="3" readonly style="resize:vertical; background:rgba(0,0,0,0.25);" placeholder="Sanitized output with masked PII will appear here..."></textarea>
+
+        <div id="sandbox-findings" style="margin-top: 10px; font-size: 12px; min-height: 18px;">
+          <!-- Populated from JS -->
+        </div>
+      </section>
+
       <!-- Whitelist Domain Management -->
       <section class="settings-group">
         <h3><span>🌐</span> Whitelisted Domains</h3>
@@ -333,6 +356,7 @@
     </div>
   </div>
   <script src="../core/url-analyzer.js"></script>
+  <script src="../core/pii-analyzer.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

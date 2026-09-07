@@ -22,9 +22,12 @@
 | **TSK-09** | Phase 5 | **P2 (Important)** | URL shortener identification & destination obscurity heuristic | `core/url-analyzer.js`, `tests/url-safety.test.js` | None | **COMPLETED** | `npm test` |
 | **TSK-10** | Phase 5 | **P2 (Important)** | Modern social engineering & scam detector expansion | `core/scam-analyzer.js`, `tests/scam-detector.test.js` | None | **COMPLETED** | `npm test` |
 | **TSK-11** | Phase 5 | **P3 (Improvement)** | CSS isolation hardening and box-sizing reset protection | `content.css` | None | **COMPLETED** | `npm run check`, visual inspection |
-| **TSK-12** | Phase 6 | **P2 (Important)** | Context menu quick analysis engine for links and text | `manifest.json`, `background.js`, `content.js` | TSK-08 | **PENDING** | `npm run check`, E2E test |
-| **TSK-13** | Phase 6 | **P2 (Important)** | Interactive PII Redactor & Sanitizer preview sandbox | `options/options.html`, `options/options.js` | TSK-04 | **PENDING** | `npm run check`, `npm test` |
-| **TSK-14** | Phase 6 | **P3 (Improvement)** | Tab Threat Notification & Toast Alert Dispatcher | `content.js`, `content.css` | TSK-11 | **PENDING** | `npm run check`, E2E test |
+| **TSK-12** | Phase 6 | **P2 (Important)** | Context menu quick analysis engine for links and text | `manifest.json`, `background.js`, `content.js` | TSK-08 | **COMPLETED** | `npm run check`, E2E test |
+| **TSK-13** | Phase 6 | **P2 (Important)** | Interactive PII Redactor & Sanitizer preview sandbox | `options/options.html`, `options/options.js` | TSK-04 | **COMPLETED** | `npm run check`, `npm test` |
+| **TSK-14** | Phase 6 | **P3 (Improvement)** | Tab Threat Notification & Toast Alert Dispatcher | `content.js`, `content.css` | TSK-11 | **COMPLETED** | `npm run check`, E2E test |
+| **TSK-15** | Phase 7 | **P2 (Important)** | Form Action & Insecure Submission Inspector | `content.js`, `core/url-analyzer.js` | None | **PENDING** | `npm run check`, E2E test |
+| **TSK-16** | Phase 7 | **P2 (Important)** | Live Threat Counter Badge Reactive Tab-Switch Sync | `background.js` | None | **PENDING** | `npm run check`, E2E test |
+| **TSK-17** | Phase 7 | **P3 (Improvement)** | Zero-dependency core performance benchmark suite | `scripts/bench.js`, `package.json` | None | **PENDING** | `npm run bench` |
 
 ---
 
@@ -192,3 +195,38 @@
 - **Acceptance Criteria:**
   - Non-blocking auto-dismissing toast messages with accessible close triggers.
 - **Validation:** `npm run check`, `npm run test:e2e`.
+
+---
+
+### TSK-15: Form Action & Insecure Submission Inspector
+- **Objective:** Extend form scanning in `content.js` to evaluate `form.action` target URLs through `core/url-analyzer.js`, identifying credential theft endpoints, unencrypted HTTP form posts on HTTPS origins (mixed content), and dangerous URI schemes in form actions.
+- **Files Affected:**
+  - `content.js`
+  - `core/url-analyzer.js`
+  - `tests/e2e/extension-lifecycle.test.js`
+- **Acceptance Criteria:**
+  - Insecure and phishing form actions display warning badges adjacent to form submit buttons.
+  - Mixed-content submissions (HTTPS page posting to HTTP action) are flagged as critical security threats.
+- **Validation:** `npm run check`, `npm run test:e2e`.
+
+---
+
+### TSK-16: Live Threat Counter Badge Reactive Tab-Switch Sync
+- **Objective:** Add `chrome.tabs.onActivated` listener in `background.js` to immediately sync `chrome.action.setBadgeText` and badge background color when switching between browser tabs, ensuring real-time threat counts reflect the current active tab without delay.
+- **Files Affected:**
+  - `background.js`
+- **Acceptance Criteria:**
+  - Switching to a tab with threats updates the toolbar badge immediately to match the active tab's session threat count.
+  - Switching to a clean tab clears the badge immediately.
+- **Validation:** `npm run check`, E2E test.
+
+---
+
+### TSK-17: Zero-Dependency Core Performance Benchmark Suite
+- **Objective:** Build a zero-dependency performance benchmarking script (`scripts/bench.js`) using Node.js `node:perf_hooks` measuring throughput (URLs/sec, PII regex evaluations/sec, scam rule matches/sec) and asserting execution within latency budgets.
+- **Files Affected:**
+  - `scripts/bench.js`
+  - `package.json`
+- **Acceptance Criteria:**
+  - `npm run bench` runs and outputs operations per second and latency percentiles (p50, p95, p99).
+- **Validation:** `npm run bench` passes without dependencies.

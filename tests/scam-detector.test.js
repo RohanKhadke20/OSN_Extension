@@ -62,6 +62,46 @@ describe("Scam & Fraud Content Detector", () => {
     assert.equal(res.severity, "warning");
   });
 
+  it("detects QR code phishing (quishing) lures", () => {
+    const texts = [
+      "Security Notice: Scan QR code to verify your credentials immediately.",
+      "Scan this QR code to log in securely to your mobile account.",
+      "Scan the QR code to receive payment into your account."
+    ];
+
+    for (const text of texts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected flagged for quishing: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "quishing-lure");
+    }
+  });
+
+  it("detects NFT drainer and stealth drop scams", () => {
+    const text = "Surprise community reward! Free mint is live right now! Mint your free NFT before allocation ends.";
+    const res = detectScamContent(text);
+    assert.equal(res.flagged, true);
+    assert.equal(res.severity, "critical");
+    assert.equal(res.id, "nft-drainer");
+  });
+
+  it("detects AI token and fake yield multiplier scams", () => {
+    const text = "Exclusive opportunity: Claim free AI tokens with our AI arbitrage bot guaranteed 50% weekly return!";
+    const res = detectScamContent(text);
+    assert.equal(res.flagged, true);
+    assert.equal(res.severity, "warning");
+    assert.equal(res.id, "ai-token-fraud");
+  });
+
+  it("prioritizes critical threats over warnings in compound scam posts", () => {
+    // Contains a warning keyword ("telegram channel join") AND a critical keyword ("enter seed phrase")
+    const compoundText = "Telegram channel join here! Important: enter seed phrase to verify and claim your compensation.";
+    const res = detectScamContent(compoundText);
+    assert.equal(res.flagged, true);
+    assert.equal(res.severity, "critical", "Expected critical threat to take precedence over warning");
+    assert.equal(res.id, "seed-phrase-theft");
+  });
+
   it("ignores benign regular social posts", () => {
     const benignTexts = [
       "Just had a wonderful brunch with friends! Hope everyone has a productive Monday.",

@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Elements
   const closeBtn = document.getElementById("close-options-btn");
   const saveSuccessAlert = document.getElementById("save-success");
+  const saveErrorAlert = document.getElementById("save-error");
 
   // Custom PII Elements
   const newPiiName = document.getElementById("new-pii-name");
@@ -38,6 +39,19 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => {
       saveSuccessAlert.style.display = "none";
     }, 3000);
+  };
+
+  // Helper to show inline validation errors without blocking thread
+  const triggerErrorAlert = (message) => {
+    if (!saveErrorAlert) {
+      alert(message);
+      return;
+    }
+    saveErrorAlert.textContent = `⚠ ${message}`;
+    saveErrorAlert.style.display = "block";
+    setTimeout(() => {
+      saveErrorAlert.style.display = "none";
+    }, 4000);
   };
 
   // Close Settings
@@ -140,19 +154,24 @@ document.addEventListener("DOMContentLoaded", () => {
   // Add Custom PII Pattern
   addPiiBtn.addEventListener("click", () => {
     const name = newPiiName.value.trim();
-    const pattern = newPiiPattern.value.trim();
+    let pattern = newPiiPattern.value.trim();
     const severity = newPiiSeverity.value;
 
     if (!name || !pattern) {
-      alert("Please provide both a Rule Name and a Regex Pattern.");
+      triggerErrorAlert("Please provide both a Rule Name and a Regex Pattern.");
       return;
+    }
+
+    // Strip wrapping slashes if user pasted a regex literal e.g. /^[0-9]+$/
+    if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
+      pattern = pattern.substring(1, pattern.lastIndexOf("/"));
     }
 
     // Verify valid Regular Expression syntax
     try {
       new RegExp(pattern);
     } catch {
-      alert("Invalid Regular Expression syntax. Please verify your pattern.");
+      triggerErrorAlert("Invalid Regular Expression syntax. Please check your pattern.");
       return;
     }
 
@@ -240,9 +259,12 @@ document.addEventListener("DOMContentLoaded", () => {
       cleanDomain = cleanDomain.substring(4);
     }
 
+    // Strip trailing paths, ports, or queries
+    cleanDomain = cleanDomain.split("/")[0].split("?")[0].split(":")[0];
+
     // Basic domain validation
     if (!cleanDomain || cleanDomain.length < 3 || (!cleanDomain.includes(".") && cleanDomain !== "localhost")) {
-      alert("Please enter a valid domain format (e.g. example.com or *.internal.net).");
+      triggerErrorAlert("Please enter a valid domain format (e.g. example.com or *.internal.net).");
       return;
     }
 
@@ -256,7 +278,7 @@ document.addEventListener("DOMContentLoaded", () => {
         triggerSuccessAlert(`Whitelisted "${domainToStore}".`);
       });
     } else {
-      alert("This domain is already on your whitelist.");
+      triggerErrorAlert("This domain is already on your whitelist.");
     }
   });
 

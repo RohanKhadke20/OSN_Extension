@@ -178,6 +178,17 @@
       display: none;
       animation: osn-guard-fade-in 0.3s;
     }
+    .error-alert {
+      background-color: var(--color-critical-light);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--color-critical);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      display: none;
+      animation: osn-guard-fade-in 0.3s;
+    }
     .stats-summary-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -216,6 +227,9 @@
 
     <div id="save-success" class="success-alert">
       ✓ Settings updated successfully.
+    </div>
+    <div id="save-error" class="error-alert">
+      ⚠ Input validation error.
     </div>
 
     <div class="settings-grid">

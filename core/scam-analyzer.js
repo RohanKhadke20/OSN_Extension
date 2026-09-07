@@ -113,13 +113,55 @@
         "moneygram fee to claim"
       ],
       reason: "Potential advance-fee fraud or fake prize generation scheme."
+    },
+    {
+      id: "quishing-lure",
+      category: "QR Code Phishing (Quishing)",
+      severity: "critical",
+      keywords: [
+        "scan qr code to verify",
+        "scan this qr code to log in",
+        "scan qr to login",
+        "scan the qr code to receive payment",
+        "scan qr code to update payment",
+        "scan to unlock your account"
+      ],
+      reason: "Potential QR code phishing (Quishing) designed to bypass browser link inspection."
+    },
+    {
+      id: "nft-drainer",
+      category: "NFT Drainer / Stealth Drop",
+      severity: "critical",
+      keywords: [
+        "stealth drop is live",
+        "free mint is live",
+        "mint your free nft",
+        "claim free nft whitelist",
+        "claim limited allocation"
+      ],
+      reason: "Suspected fake NFT mint lure or malicious contract approval drainer."
+    },
+    {
+      id: "ai-token-fraud",
+      category: "AI Token / Fake Yield Scam",
+      severity: "warning",
+      keywords: [
+        "claim free ai tokens",
+        "chatgpt tokens giveaway",
+        "invest in ai compute",
+        "ai arbitrage bot guaranteed",
+        "daily passive crypto yield",
+        "guaranteed 50% weekly return"
+      ],
+      reason: "Deceptive AI investment scheme or unregulated yield multiplier."
     }
   ];
 
   /**
    * Analyzes text content for scam, fraud, or phishing indicators
+   * Prioritizes critical severity matches over warnings when multiple indicators exist
    * @param {string} text - The post or message content
-   * @returns {{ flagged: boolean, category?: string, reason?: string, severity?: "warning" | "critical", matchedKeyword?: string }}
+   * @returns {{ flagged: boolean, id?: string, category?: string, reason?: string, severity?: "warning" | "critical", matchedKeyword?: string }}
    */
   function detectScamContent(text) {
     if (!text || typeof text !== "string" || text.trim().length < 8) {
@@ -127,23 +169,31 @@
     }
 
     const lower = text.toLowerCase();
+    const matches = [];
 
     for (const rule of SCAM_RULES) {
       for (const keyword of rule.keywords) {
         if (lower.includes(keyword)) {
-          return {
+          matches.push({
             flagged: true,
             id: rule.id,
             category: rule.category,
             reason: rule.reason,
             severity: rule.severity,
             matchedKeyword: keyword
-          };
+          });
+          break; // Match at most once per rule category
         }
       }
     }
 
-    return { flagged: false };
+    if (matches.length === 0) {
+      return { flagged: false };
+    }
+
+    // Always surface critical threats first
+    const topThreat = matches.find(m => m.severity === "critical") || matches[0];
+    return topThreat;
   }
 
   return {

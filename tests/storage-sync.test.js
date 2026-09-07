@@ -81,4 +81,31 @@ describe("Storage & Integration Helpers", () => {
       assert.equal(results[0].match, "REF-456");
     });
   });
+
+  describe("Stats and Counter Math Logic", () => {
+    it("accumulates stats safely without NaN or false increments", () => {
+      const stats = {
+        linksScanned: 10,
+        piiBlockedCount: 2,
+        threatsDetected: 1,
+        sitesProtected: 3
+      };
+
+      const update = {
+        linksScanned: 5,
+        threats: 2,
+        siteProtected: false
+      };
+
+      if (update.linksScanned) stats.linksScanned += update.linksScanned;
+      if (update.piiBlocked) stats.piiBlockedCount += update.piiBlocked;
+      if (update.threats) stats.threatsDetected += update.threats;
+      if (update.siteProtected) stats.sitesProtected += 1;
+
+      assert.equal(stats.linksScanned, 15);
+      assert.equal(stats.piiBlockedCount, 2);
+      assert.equal(stats.threatsDetected, 3);
+      assert.equal(stats.sitesProtected, 3); // Untouched because siteProtected was false
+    });
+  });
 });

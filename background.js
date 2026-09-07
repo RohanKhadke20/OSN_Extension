@@ -163,8 +163,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
+// Clean up tab data when tab begins navigating to a new URL
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === "loading") {
+    const tabKey = `tab_${tabId}`;
+    getSessionStorage().remove(tabKey);
+    if (chrome.action) {
+      chrome.action.setBadgeText({ text: "", tabId: tabId });
+    }
+  }
+});
+
 // Clean up tab data when tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
   const tabKey = `tab_${tabId}`;
   getSessionStorage().remove(tabKey);
 });
+

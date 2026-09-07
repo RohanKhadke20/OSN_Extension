@@ -126,6 +126,7 @@
   function rescanPage() {
     clearAllBadgesAndAlerts();
     document.querySelectorAll(`[${SCANNED_ATTR}]`).forEach(el => el.removeAttribute(SCANNED_ATTR));
+    document.querySelectorAll("[data-osn-badged]").forEach(el => el.removeAttribute("data-osn-badged"));
     pageThreats = [];
     isInitialReportDone = false;
     scanPage();
@@ -181,7 +182,10 @@
       const isExternalMutation = mutations.some(m => {
         return Array.from(m.addedNodes).some(node => {
           if (node.nodeType !== Node.ELEMENT_NODE) return false;
-          return !node.className || (typeof node.className === "string" && !node.className.includes("osn-guard"));
+          const cls = typeof node.className === "string"
+            ? node.className
+            : (node.className && typeof node.className.baseVal === "string" ? node.className.baseVal : "");
+          return !cls || !cls.includes("osn-guard");
         });
       });
 
@@ -315,6 +319,8 @@
         threats: newThreatsCount,
         siteProtected: scanStats.siteProtected
       });
+      // Reset siteProtected flag to prevent counting site multiple times on scroll mutations
+      scanStats.siteProtected = false;
     }
   }
 
@@ -348,6 +354,14 @@
       selector = '.feed-shared-update-v2__description-text, .feed-shared-text, .msg-s-event-listitem__body';
     } else if (hostname.includes("reddit.com")) {
       selector = 'div[data-click-id="text-content"], .RichTextJSON-root, [data-testid="post-container"] p';
+    } else if (hostname.includes("threads.net")) {
+      selector = 'div[dir="auto"], span[dir="auto"]';
+    } else if (hostname.includes("bsky.app")) {
+      selector = 'div[data-testid^="postContent"], div[dir="auto"]';
+    } else if (hostname.includes("instagram.com")) {
+      selector = 'h1, span._aacl, div._a9zs, ul._a9z6';
+    } else if (hostname.includes("youtube.com")) {
+      selector = '#content-text, ytd-comment-renderer #content-text';
     }
 
     const elements = document.querySelectorAll(selector);
@@ -362,19 +376,25 @@
 
   // Badge Insertion
   function addUrlWarningBadge(linkElement, threat) {
-    if (!linkElement || !linkElement.parentNode || linkElement.querySelector(".osn-guard-warning-badge")) return;
+    if (!linkElement || !linkElement.parentNode) return;
+    if (linkElement.hasAttribute("data-osn-badged")) return;
+    if (linkElement.nextElementSibling && linkElement.nextElementSibling.classList.contains("osn-guard-tooltip-wrapper")) return;
+
+    linkElement.setAttribute("data-osn-badged", "true");
     const badgeWrapper = createBadge(threat, "url");
     linkElement.parentNode.insertBefore(badgeWrapper, linkElement.nextSibling);
   }
 
   function addContentWarningBadge(containerElement, threat) {
-    if (!containerElement || containerElement.querySelector(".osn-guard-warning-badge")) return;
+    if (!containerElement || containerElement.hasAttribute("data-osn-badged") || containerElement.querySelector(".osn-guard-warning-badge")) return;
+    containerElement.setAttribute("data-osn-badged", "true");
     const badgeWrapper = createBadge(threat, "content");
     containerElement.appendChild(badgeWrapper);
   }
 
   function addFormWarningBadge(formElement, threat) {
-    if (!formElement || formElement.querySelector(".osn-guard-warning-badge")) return;
+    if (!formElement || formElement.hasAttribute("data-osn-badged") || formElement.querySelector(".osn-guard-warning-badge")) return;
+    formElement.setAttribute("data-osn-badged", "true");
     const badgeWrapper = createBadge(threat, "security");
     if (formElement.firstChild) {
       formElement.insertBefore(badgeWrapper, formElement.firstChild);
@@ -510,6 +530,14 @@
     if (!element || !banner || !document.body.contains(element)) return;
 
     const rect = element.getBoundingClientRect();
+
+    // If input element is invisible or hidden (e.g. modal dismissed), hide the banner
+    if (rect.width === 0 && rect.height === 0) {
+      banner.style.display = "none";
+      return;
+    }
+    banner.style.display = "flex";
+
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
 

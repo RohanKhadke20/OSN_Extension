@@ -429,14 +429,23 @@
     const target = e.target;
     if (!target) return;
 
+    // Ignore password inputs, hidden tokens, and file uploads
+    if (target.type === "password" || target.type === "hidden" || target.type === "file") return;
+
     const isInputField = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.getAttribute("contenteditable") === "true";
     if (!isInputField) return;
 
+    // Fast check for paste events (50ms) vs debounce for typing (300ms)
+    const delay = e.type === "paste" ? 50 : 300;
+
     clearTimeout(target._osnPiiTimeout);
     target._osnPiiTimeout = setTimeout(() => {
-      const text = (target.tagName === "INPUT" || target.tagName === "TEXTAREA") ? target.value : target.innerText;
+      // Use textContent for contenteditable to avoid forced synchronous layout reflows
+      const text = (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+        ? target.value
+        : (target.textContent || "");
       inspectPii(target, text);
-    }, 350);
+    }, delay);
   }
 
   function inspectPii(element, text) {

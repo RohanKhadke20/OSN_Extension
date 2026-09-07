@@ -536,7 +536,12 @@
   }
 
   function positionBanner(element, banner) {
-    if (!element || !banner || !document.body.contains(element)) return;
+    if (!element || !banner) return;
+    if (!document.body.contains(element)) {
+      banner.remove();
+      activeAlertBanners.delete(element);
+      return;
+    }
 
     const rect = element.getBoundingClientRect();
 
@@ -564,6 +569,10 @@
       positionBanner(element, banner);
     });
   }
+
+  // Keep PII alert banners aligned on scroll or viewport changes
+  window.addEventListener("scroll", updateAllBannerPositions, { passive: true });
+  window.addEventListener("resize", updateAllBannerPositions, { passive: true });
 
   function removePiiWarning(element) {
     element.classList.remove("osn-guard-input-warning", "osn-guard-input-critical");

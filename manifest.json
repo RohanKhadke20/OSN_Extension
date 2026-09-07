@@ -26,9 +26,22 @@
       "run_at": "document_end"
     }
   ],
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "OSN Guard"
+    "default_title": "OSN Guard",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "48": "assets/icons/icon-48.png",
+      "128": "assets/icons/icon-128.png"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
   },
   "options_ui": {
     "page": "options/options.html",

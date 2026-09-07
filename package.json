@@ -1,9 +1,10 @@
 {
   "name": "osn-guard",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "OSN Guard - Safety & Privacy Shield for Social Networks",
   "private": true,
   "scripts": {
+    "check": "node --check background.js content.js core/*.js options/*.js popup/*.js tests/*.test.js",
     "test": "node --test tests/*.test.js",
     "test:watch": "node --test --watch tests/*.test.js"
   },

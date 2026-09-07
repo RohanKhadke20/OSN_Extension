@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OSN Guard - Safety & Privacy Shield",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Protects your privacy and safety on social networks by scanning for PII leaks, phishing links, scams, and insecure configurations.",
   "permissions": [
     "storage",

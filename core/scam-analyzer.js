@@ -184,6 +184,64 @@
         "recharge wallet to unlock commission"
       ],
       reason: "Suspected task-based advance payment scam or deceptive review syndicate."
+    },
+    {
+      id: "romance-pig-butchering",
+      category: "Romance Grooming / Pig-Butchering Scam",
+      severity: "critical",
+      keywords: [
+        "move to whatsapp my dear",
+        "chat on whatsapp instead",
+        "my uncle teaches me crypto",
+        "uncle works in finance",
+        "guaranteed crypto trading platform",
+        "invest together on this platform",
+        "my financial advisor helps me trade",
+        "teach you how to trade gold",
+        "exclusive liquidity pool",
+        "let's talk on telegram handsome",
+        "let's chat on telegram honey",
+        "my private whatsapp number"
+      ],
+      reason: "Suspected romance grooming or 'pig-butchering' crypto investment redirection."
+    },
+    {
+      id: "invoice-refund-fraud",
+      category: "Fake Invoice / Refund Scam",
+      severity: "critical",
+      keywords: [
+        "geek squad renewal",
+        "mcafee subscription renewed",
+        "norton auto-renewal",
+        "charged your account $399",
+        "charged your account $499",
+        "auto-debit of $",
+        "call to cancel subscription",
+        "call to dispute this charge",
+        "invoice attached call",
+        "call toll-free to refund",
+        "refund department hotline",
+        "cancel within 24 hours to get refund"
+      ],
+      reason: "Suspected fake invoice or auto-renewal refund fraud designed to elicit remote desktop access or banking credentials."
+    },
+    {
+      id: "emergency-impersonation",
+      category: "Family Emergency / Grandparent Scam",
+      severity: "critical",
+      keywords: [
+        "lost my phone this is my new number",
+        "dropped my phone in water",
+        "in trouble please don't tell mom",
+        "in trouble please don't tell dad",
+        "urgent bail money",
+        "need money urgently please send",
+        "stranded at the airport need cash",
+        "in an accident need emergency money",
+        "hospital bill urgent send funds",
+        "can't call right now please wire"
+      ],
+      reason: "Suspected family emergency or impersonation scam targeting urgent money transfers."
     }
   ];
 

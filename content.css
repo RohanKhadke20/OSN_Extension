@@ -1,5 +1,11 @@
 /* CSS styles injected into web pages by OSN Guard */
 
+/* Ensure complete box-sizing isolation for all OSN Guard components against host CSS resets */
+[class*="osn-guard-"],
+[class*="osn-guard-"] * {
+  box-sizing: border-box !important;
+}
+
 /* Badge styles */
 .osn-guard-warning-badge {
   display: inline-flex !important;
@@ -14,6 +20,12 @@
   font-family: system-ui, -apple-system, sans-serif !important;
   font-size: 11px !important;
   font-weight: bold !important;
+  font-style: normal !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-indent: 0 !important;
+  text-decoration: none !important;
+  text-shadow: none !important;
   color: #ffffff !important;
   vertical-align: middle !important;
   position: relative !important;
@@ -44,6 +56,7 @@
   position: relative !important;
   display: inline-block !important;
   vertical-align: middle !important;
+  box-sizing: border-box !important;
 }
 
 /* Global floating tooltip attached to body to prevent overflow clipping */
@@ -62,6 +75,12 @@
   font-size: 12px !important;
   line-height: 1.4 !important;
   font-weight: normal !important;
+  font-style: normal !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-indent: 0 !important;
+  text-decoration: none !important;
+  text-shadow: none !important;
   pointer-events: none !important;
   transition: opacity 0.15s ease-out !important;
 }
@@ -104,6 +123,7 @@
 
 /* Inline floating input banner alerts */
 .osn-guard-input-alert-banner {
+  box-sizing: border-box !important;
   position: absolute !important;
   background: #111827 !important;
   color: #f3f4f6 !important;
@@ -112,6 +132,12 @@
   padding: 6px 10px !important;
   font-size: 11px !important;
   font-family: system-ui, -apple-system, sans-serif !important;
+  font-style: normal !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-indent: 0 !important;
+  text-decoration: none !important;
+  text-shadow: none !important;
   z-index: 2147483640 !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
   display: flex !important;

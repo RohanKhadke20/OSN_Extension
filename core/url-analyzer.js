@@ -87,10 +87,38 @@
     "airdrop", "wallet-connect", "password-reset", "recover", "billing"
   ];
 
-  // IP address regex patterns (IPv4, IPv6, and dword/hex representations)
+  // Known URL shortening services frequently abused to conceal phishing/scam destinations
+  const SHORTENER_DOMAINS = new Set([
+    "bit.ly",
+    "tinyurl.com",
+    "is.gd",
+    "v.gd",
+    "buff.ly",
+    "ow.ly",
+    "rb.gy",
+    "cutt.ly",
+    "shorturl.at",
+    "rebrand.ly",
+    "tiny.cc",
+    "bc.vc",
+    "t.ly",
+    "soo.gd",
+    "clck.ru",
+    "rotf.lol",
+    "s.id",
+    "shorte.st"
+  ]);
+
+  // IP address regex patterns (IPv4, IPv6, octal/hex dotted, and dword representations)
   const IPV4_PATTERN = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-  const IPV6_PATTERN = /^\[[0-9a-fA-F:]+\]$/;
+  const IPV6_PATTERN = /^(?:\[[0-9a-fA-F:]+\]|[0-9a-fA-F]{0,4}(?::[0-9a-fA-F]{0,4}){2,7})$/;
   const DWORD_IP_PATTERN = /^(?:0x[0-9a-fA-F]+|\d{8,11})$/;
+  const DOTTED_OCTAL_HEX_IP_PATTERN = /^(?:0x[0-9a-fA-F]{1,4}|0[0-7]{1,6}|\d{1,4})(?:\.(?:0x[0-9a-fA-F]{1,4}|0[0-7]{1,6}|\d{1,4})){1,3}$/;
+
+  // Unicode character blocks for detecting mixed-script confusable homoglyphs
+  const CYRILLIC_PATTERN = /[\u0400-\u04FF]/;
+  const GREEK_PATTERN = /[\u0370-\u03FF]/;
+  const LATIN_PATTERN = /[a-zA-Z]/;
 
   // Dangerous URI schemes that can carry obfuscated scripts, file system exploits, or payload data
   const DANGEROUS_SCHEMES = new Set(["data:", "blob:", "file:", "filesystem:"]);
@@ -103,13 +131,45 @@
   ]);
 
   /**
-   * Checks if a given hostname is a raw IP address (IPv4, IPv6, or integer notation)
+   * Checks if a given hostname is a raw IP address (IPv4, IPv6, octal/hex, or integer notation)
    * @param {string} host - Hostname string
    * @returns {boolean}
    */
   function isRawIpAddress(host) {
     if (!host) return false;
-    return IPV4_PATTERN.test(host) || IPV6_PATTERN.test(host) || DWORD_IP_PATTERN.test(host);
+    return IPV4_PATTERN.test(host) ||
+      IPV6_PATTERN.test(host) ||
+      DWORD_IP_PATTERN.test(host) ||
+      DOTTED_OCTAL_HEX_IP_PATTERN.test(host);
+  }
+
+  /**
+   * Detects mixed-script confusable homoglyphs (e.g. Cyrillic/Greek letters mixed with Latin)
+   * @param {string} str - String to inspect
+   * @returns {boolean}
+   */
+  function hasMixedScriptConfusables(str) {
+    if (!str || typeof str !== "string") return false;
+    const hasLatin = LATIN_PATTERN.test(str);
+    const hasCyrillic = CYRILLIC_PATTERN.test(str);
+    const hasGreek = GREEK_PATTERN.test(str);
+    return (hasLatin && hasCyrillic) || (hasLatin && hasGreek);
+  }
+
+  /**
+   * Checks if a domain is a known URL shortener service
+   * @param {string} domain - Hostname to check
+   * @returns {boolean}
+   */
+  function isUrlShortener(domain) {
+    if (!domain) return false;
+    const clean = domain.toLowerCase().replace(/\.+$/, "");
+    const hostWithoutWww = clean.startsWith("www.") ? clean.slice(4) : clean;
+    if (SHORTENER_DOMAINS.has(hostWithoutWww)) return true;
+    for (const shortener of SHORTENER_DOMAINS) {
+      if (hostWithoutWww.endsWith("." + shortener)) return true;
+    }
+    return false;
   }
 
   /**
@@ -207,6 +267,23 @@
   }
 
   /**
+   * Extracts candidate hostname from a URL string before parsing
+   * @param {string} str - Raw URL string
+   * @returns {string} - Extracted host or empty string
+   */
+  function extractCandidateHost(str) {
+    if (!str || typeof str !== "string") return "";
+    try {
+      const match = str.trim().toLowerCase().match(/^(?:[a-z][a-z0-9+.-]*:\/\/)?([^/?#]+)/i);
+      if (!match || !match[1]) return "";
+      const hostPort = match[1].includes("@") ? match[1].split("@").pop() : match[1];
+      return hostPort.split(":")[0].replace(/\.+$/, "");
+    } catch {
+      return "";
+    }
+  }
+
+  /**
    * Analyzes the safety of a given URL
    * @param {string} urlString - The URL string to inspect
    * @param {Array<string>} whitelistedDomains - Optional user-configured whitelist
@@ -224,11 +301,17 @@
       return { safe: true, reason: "Ignored internal or interactive scheme" };
     }
 
-    // Early detection of Punycode (IDN) attempts to catch both valid and malformed homograph exploits
-    if (trimmed.includes("://xn--") || trimmed.includes(".xn--") || trimmed.startsWith("xn--")) {
+    // Early detection of Punycode (IDN) or mixed-script confusable homograph attempts
+    const candidateHost = extractCandidateHost(trimmed);
+    if (
+      trimmed.includes("://xn--") ||
+      trimmed.includes(".xn--") ||
+      trimmed.startsWith("xn--") ||
+      (candidateHost && hasMixedScriptConfusables(candidateHost))
+    ) {
       return {
         safe: false,
-        reason: "Punycode (IDN) domain detected: potential spoofing or homograph phishing",
+        reason: "Punycode (IDN) or mixed-script confusable domain detected: potential spoofing or homograph phishing",
         severity: "critical"
       };
     }
@@ -318,11 +401,16 @@
       };
     }
 
-    // Check 4: IDN Homograph / Punycode Attacks
-    if (domain.startsWith("xn--") || domain.includes(".xn--")) {
+    // Check 4: IDN Homograph / Punycode Attacks and Mixed-Script Confusables
+    if (
+      domain.startsWith("xn--") ||
+      domain.includes(".xn--") ||
+      hasMixedScriptConfusables(domain) ||
+      (candidateHost && hasMixedScriptConfusables(candidateHost))
+    ) {
       return {
         safe: false,
-        reason: "Punycode (IDN) domain detected: potential spoofing or homograph phishing",
+        reason: "Punycode (IDN) or mixed-script confusable domain detected: potential spoofing or homograph phishing",
         severity: "critical"
       };
     }
@@ -371,6 +459,11 @@
       heuristics.push("Contains external open redirect parameter pointing to external host");
     }
 
+    // Heuristic H: URL Shortener / Destination Obscurity
+    if (isUrlShortener(domain)) {
+      heuristics.push("URL shortener detected: destination target is obscured");
+    }
+
     if (heuristics.length > 0) {
       const isCritical = heuristics.length >= 2 || heuristics.some(h => h.includes("raw IP address") || h.includes("embedded credentials"));
       return {
@@ -388,9 +481,13 @@
     analyzeUrlSafety,
     isDomainWhitelisted,
     isSafeDomain,
+    isRawIpAddress,
+    hasMixedScriptConfusables,
+    isUrlShortener,
     SAFE_DOMAINS,
     SUSPICIOUS_DOMAINS,
     SUSPICIOUS_TLDS,
-    PHISHING_KEYWORDS
+    PHISHING_KEYWORDS,
+    SHORTENER_DOMAINS
   };
 });

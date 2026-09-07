@@ -134,6 +134,56 @@ describe("Scam & Fraud Content Detector", () => {
     }
   });
 
+  it("detects romance grooming and pig-butchering investment redirection", () => {
+    const romanceTexts = [
+      "You seem so kind! Let's move to WhatsApp my dear, I rarely check this app.",
+      "My uncle teaches me crypto trading on a special platform with 100% win rate.",
+      "We can invest together on this platform, my financial advisor helps me trade daily.",
+      "Let's chat on Telegram honey, I can teach you how to trade gold contracts."
+    ];
+
+    for (const text of romanceTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected flagged for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "romance-pig-butchering");
+      assert.match(res.category, /Pig-Butchering/i);
+    }
+  });
+
+  it("detects fake invoice and auto-renewal refund scams", () => {
+    const invoiceTexts = [
+      "Your Geek Squad renewal has been processed. Charged your account $399.99. Call to cancel subscription immediately.",
+      "McAfee subscription renewed for 3 years. Auto-debit of $499 will appear on bank statement. Invoice attached call 1-800-555-0199.",
+      "Norton auto-renewal confirmed. Call to dispute this charge or refund department hotline within 24 hours."
+    ];
+
+    for (const text of invoiceTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected flagged for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "invoice-refund-fraud");
+      assert.match(res.category, /Fake Invoice/i);
+    }
+  });
+
+  it("detects family emergency and impersonation scams", () => {
+    const emergencyTexts = [
+      "Hi mom, I dropped my phone in water and lost my phone this is my new number.",
+      "Dad, I'm in trouble please don't tell mom, I need urgent bail money right now.",
+      "Stranded at the airport need cash to get home, can't call right now please wire.",
+      "I was in an accident need emergency money for hospital bill urgent send funds."
+    ];
+
+    for (const text of emergencyTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected flagged for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "emergency-impersonation");
+      assert.match(res.category, /Family Emergency/i);
+    }
+  });
+
   it("ignores benign regular social posts", () => {
     const benignTexts = [
       "Just had a wonderful brunch with friends! Hope everyone has a productive Monday.",

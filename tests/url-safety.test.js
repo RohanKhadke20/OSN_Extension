@@ -1,6 +1,13 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { analyzeUrlSafety, isDomainWhitelisted } = require("../core/url-analyzer.js");
+const {
+  analyzeUrlSafety,
+  isDomainWhitelisted,
+  isRawIpAddress,
+  hasMixedScriptConfusables,
+  isUrlShortener,
+  SHORTENER_DOMAINS
+} = require("../core/url-analyzer.js");
 
 describe("URL Safety Analyzer", () => {
   it("recognizes safe domains and their subdomains", () => {
@@ -51,14 +58,19 @@ describe("URL Safety Analyzer", () => {
     }
   });
 
-  it("flags raw IP address hostnames including IPv4, IPv6, and dword formats", () => {
+  it("flags raw IP address hostnames including IPv4, IPv6, octal, hex, and dword formats", () => {
     const ipUrls = [
       "http://192.168.1.100/admin",
       "https://45.33.32.156/setup",
       "http://10.0.0.1",
       "http://[::1]/debug",
       "https://[2001:db8::1]/status",
-      "http://2130706433/gateway"
+      "http://2130706433/gateway",
+      "http://0177.0.0.1/admin",
+      "http://0x7f.0.0.1/console",
+      "http://0x7f.0x0.0x0.0x1/test",
+      "http://0x7f000001/status",
+      "http://127.1/debug"
     ];
 
     for (const url of ipUrls) {
@@ -212,5 +224,94 @@ describe("URL Safety Analyzer", () => {
     const whitelist = ["my-corp.com"];
     const trailingDotWhitelist = analyzeUrlSafety("https://portal.my-corp.com./login", whitelist);
     assert.equal(trailingDotWhitelist.safe, true);
+  });
+
+  it("detects mixed-script confusable homoglyph domain attacks", () => {
+    // Cyrillic 'о' (\u043E) mixed with Latin 'g', 'g', 'l', 'e'
+    const cyrillicSpoof = "https://g\u043E\u043Egle.com/login";
+    const res1 = analyzeUrlSafety(cyrillicSpoof);
+    assert.equal(res1.safe, false, "Expected Cyrillic spoofed domain to be flagged");
+    assert.equal(res1.severity, "critical");
+    assert.match(res1.reason, /punycode|homograph|confusable/i);
+
+    // Greek 'α' (\u03B1) mixed with Latin 'p', 'y', 'p', 'a', 'l'
+    const greekSpoof = "https://p\u03B1ypal.com/verify";
+    const res2 = analyzeUrlSafety(greekSpoof);
+    assert.equal(res2.safe, false, "Expected Greek spoofed domain to be flagged");
+    assert.equal(res2.severity, "critical");
+    assert.match(res2.reason, /punycode|homograph|confusable/i);
+
+    // Benign query parameters containing non-Latin scripts on safe domains must remain safe
+    const benignSearch = "https://www.google.com/search?q=\u043F\u0440\u0438\u0432\u0435\u0442";
+    const res3 = analyzeUrlSafety(benignSearch);
+    assert.equal(res3.safe, true, "Benign non-Latin search query on safe domain should be safe");
+
+    const benignWiki = "https://en.wikipedia.org/wiki/\u041F\u0440\u0438\u0432\u0435\u0442";
+    const res4 = analyzeUrlSafety(benignWiki);
+    assert.equal(res4.safe, true, "Benign non-Latin path on safe domain should be safe");
+  });
+
+  it("identifies URL shorteners and flags destination obscurity", () => {
+    const pureShortenerUrls = [
+      "https://bit.ly/3xY123",
+      "https://tinyurl.com/abc789",
+      "https://t.ly/xyz99",
+      "https://is.gd/photo42",
+      "https://cutt.ly/blog-post"
+    ];
+
+    for (const url of pureShortenerUrls) {
+      const result = analyzeUrlSafety(url);
+      assert.equal(result.safe, false, `Expected shortener ${url} to be flagged`);
+      assert.equal(result.severity, "warning");
+      assert.match(result.reason, /URL shortener detected/i);
+    }
+
+    // Shortener combined with multiple phishing keywords escalates to critical
+    const phishShortener = analyzeUrlSafety("https://tinyurl.com/account-verify");
+    assert.equal(phishShortener.safe, false);
+    assert.equal(phishShortener.severity, "critical");
+    assert.match(phishShortener.reason, /phishing keywords/i);
+    assert.match(phishShortener.reason, /URL shortener detected/i);
+
+    // Whitelisted shortener domain should be permitted
+    const whitelistedResult = analyzeUrlSafety("https://bit.ly/internal-docs", ["bit.ly"]);
+    assert.equal(whitelistedResult.safe, true);
+
+    // Shortener with unencrypted HTTP should escalate to critical (two heuristics: HTTP + shortener)
+    const httpShortener = analyzeUrlSafety("http://bit.ly/3xY123");
+    assert.equal(httpShortener.safe, false);
+    assert.equal(httpShortener.severity, "critical");
+  });
+
+  it("verifies direct helper functions isRawIpAddress, hasMixedScriptConfusables, and isUrlShortener", () => {
+    // isRawIpAddress
+    assert.equal(isRawIpAddress("127.0.0.1"), true);
+    assert.equal(isRawIpAddress("192.168.1.1"), true);
+    assert.equal(isRawIpAddress("[::1]"), true);
+    assert.equal(isRawIpAddress("::1"), true);
+    assert.equal(isRawIpAddress("2001:db8::1"), true);
+    assert.equal(isRawIpAddress("0177.0.0.1"), true);
+    assert.equal(isRawIpAddress("0x7f.0.0.1"), true);
+    assert.equal(isRawIpAddress("0x7f000001"), true);
+    assert.equal(isRawIpAddress("2130706433"), true);
+    assert.equal(isRawIpAddress("127.1"), true);
+    assert.equal(isRawIpAddress("google.com"), false);
+    assert.equal(isRawIpAddress("sub.example.org"), false);
+
+    // hasMixedScriptConfusables
+    assert.equal(hasMixedScriptConfusables("google.com"), false);
+    assert.equal(hasMixedScriptConfusables("g\u043E\u043Egle.com"), true);
+    assert.equal(hasMixedScriptConfusables("p\u03B1ypal.com"), true);
+    assert.equal(hasMixedScriptConfusables("\u044F\u043D\u0434\u0435\u043A\u0441.\u0440\u0444"), false); // pure Cyrillic
+
+    // isUrlShortener
+    assert.equal(isUrlShortener("bit.ly"), true);
+    assert.equal(isUrlShortener("www.bit.ly"), true);
+    assert.equal(isUrlShortener("tinyurl.com"), true);
+    assert.equal(isUrlShortener("sub.tinyurl.com"), true);
+    assert.equal(isUrlShortener("google.com"), false);
+    assert.equal(isUrlShortener("github.com"), false);
+    assert.equal(SHORTENER_DOMAINS.has("bit.ly"), true);
   });
 });

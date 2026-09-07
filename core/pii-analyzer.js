@@ -189,6 +189,57 @@
     }
   ];
 
+  // Maximum number of cached custom regular expressions to bound memory usage
+  const MAX_CUSTOM_REGEX_CACHE_SIZE = 100;
+  const customRegexCache = new Map();
+
+  /**
+   * Retrieves or compiles a cached global RegExp instance.
+   * Resets lastIndex = 0 before returning.
+   * Caches null on compilation error to avoid redundant syntax parsing and console noise.
+   * @param {string} pattern
+   * @returns {RegExp | null}
+   */
+  function getCompiledCustomRegex(pattern) {
+    if (!pattern || typeof pattern !== "string") return null;
+
+    if (customRegexCache.has(pattern)) {
+      const cached = customRegexCache.get(pattern);
+      if (cached) {
+        cached.lastIndex = 0;
+      }
+      return cached;
+    }
+
+    try {
+      const compiled = new RegExp(pattern, "g");
+      if (customRegexCache.size >= MAX_CUSTOM_REGEX_CACHE_SIZE) {
+        const oldestKey = customRegexCache.keys().next().value;
+        customRegexCache.delete(oldestKey);
+      }
+      customRegexCache.set(pattern, compiled);
+      return compiled;
+    } catch (err) {
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn(`[OSN Guard] Invalid custom regex "${pattern}":`, err.message);
+      }
+      if (customRegexCache.size >= MAX_CUSTOM_REGEX_CACHE_SIZE) {
+        const oldestKey = customRegexCache.keys().next().value;
+        customRegexCache.delete(oldestKey);
+      }
+      customRegexCache.set(pattern, null);
+      return null;
+    }
+  }
+
+  function clearCustomRegexCache() {
+    customRegexCache.clear();
+  }
+
+  function getCustomRegexCacheSize() {
+    return customRegexCache.size;
+  }
+
   /**
    * Analyzes text for personal identifiable information (PII) leaks
    * @param {string} text - User input string
@@ -235,27 +286,22 @@
       customPatterns.forEach((cp, idx) => {
         if (!cp || !cp.pattern) return;
 
-        try {
-          const userRegex = new RegExp(cp.pattern, "g");
-          const matches = text.match(userRegex) || [];
+        const userRegex = getCompiledCustomRegex(cp.pattern);
+        if (!userRegex) return;
 
-          for (const rawMatch of matches) {
-            const trimmedMatch = rawMatch.trim();
-            if (seenMatches.has(trimmedMatch)) continue;
+        const matches = text.match(userRegex) || [];
 
-            seenMatches.add(trimmedMatch);
-            detected.push({
-              type: `custom-${idx}`,
-              name: cp.name || "Custom PII Mask",
-              severity: cp.severity === "critical" ? "critical" : "warning",
-              match: trimmedMatch
-            });
-          }
-        } catch (err) {
-          // Log or silently skip invalid user regex
-          if (typeof console !== "undefined" && console.warn) {
-            console.warn(`[OSN Guard] Invalid custom regex "${cp.pattern}":`, err.message);
-          }
+        for (const rawMatch of matches) {
+          const trimmedMatch = rawMatch.trim();
+          if (seenMatches.has(trimmedMatch)) continue;
+
+          seenMatches.add(trimmedMatch);
+          detected.push({
+            type: `custom-${idx}`,
+            name: cp.name || "Custom PII Mask",
+            severity: cp.severity === "critical" ? "critical" : "warning",
+            match: trimmedMatch
+          });
         }
       });
     }
@@ -318,6 +364,9 @@
     luhnCheck,
     isValidSSN,
     isValidIBAN,
-    BUILTIN_PATTERNS
+    BUILTIN_PATTERNS,
+    getCompiledCustomRegex,
+    clearCustomRegexCache,
+    getCustomRegexCacheSize
   };
 });

@@ -1,6 +1,15 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { detectPii, maskPii, luhnCheck, isValidSSN, isValidIBAN } = require("../core/pii-analyzer.js");
+const {
+  detectPii,
+  maskPii,
+  luhnCheck,
+  isValidSSN,
+  isValidIBAN,
+  getCompiledCustomRegex,
+  clearCustomRegexCache,
+  getCustomRegexCacheSize
+} = require("../core/pii-analyzer.js");
 
 describe("PII Leak Detector", () => {
   describe("Luhn algorithm check", () => {
@@ -230,6 +239,58 @@ describe("PII Leak Detector", () => {
 
       const safeText = "Totally benign message with nothing private.";
       assert.equal(maskPii(safeText), safeText);
+    });
+  });
+
+  describe("Custom Regex Compilation Caching", () => {
+    it("compiles and caches custom regex instances across calls", () => {
+      clearCustomRegexCache();
+      const initialSize = getCustomRegexCacheSize();
+      assert.equal(initialSize, 0);
+
+      const r1 = getCompiledCustomRegex("TEST-[0-9]+");
+      const r2 = getCompiledCustomRegex("TEST-[0-9]+");
+
+      assert.equal(r1, r2, "Expected identical RegExp object reference from cache");
+      assert.equal(getCustomRegexCacheSize(), 1);
+    });
+
+    it("resets lastIndex to 0 on subsequent retrievals", () => {
+      const regex = getCompiledCustomRegex("abc[0-9]");
+      assert.notEqual(regex, null);
+      regex.lastIndex = 4;
+
+      const retrieved = getCompiledCustomRegex("abc[0-9]");
+      assert.equal(retrieved.lastIndex, 0);
+    });
+
+    it("gracefully caches null for invalid syntax without throwing repeatedly", () => {
+      const invalid = getCompiledCustomRegex("[0-9(");
+      assert.equal(invalid, null);
+
+      const cachedInvalid = getCompiledCustomRegex("[0-9(");
+      assert.equal(cachedInvalid, null);
+    });
+
+    it("evicts oldest entries when cache limit is exceeded", () => {
+      clearCustomRegexCache();
+      for (let i = 0; i < 105; i++) {
+        getCompiledCustomRegex(`PATTERN_${i}_[0-9]`);
+      }
+      assert.equal(getCustomRegexCacheSize(), 100);
+    });
+
+    it("detects custom patterns repeatedly with cache reuse across keystrokes", () => {
+      clearCustomRegexCache();
+      const custom = [{ name: "Order ID", pattern: "ORD-[0-9]{5}" }];
+
+      const res1 = detectPii("Processing ORD-12345 now", custom);
+      const res2 = detectPii("Processing ORD-12345 and ORD-99999", custom);
+
+      assert.equal(res1.length, 1);
+      assert.equal(res1[0].match, "ORD-12345");
+      assert.equal(res2.length, 2);
+      assert.equal(getCustomRegexCacheSize(), 1);
     });
   });
 });

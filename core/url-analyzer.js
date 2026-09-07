@@ -92,6 +92,16 @@
   const IPV6_PATTERN = /^\[[0-9a-fA-F:]+\]$/;
   const DWORD_IP_PATTERN = /^(?:0x[0-9a-fA-F]+|\d{8,11})$/;
 
+  // Dangerous URI schemes that can carry obfuscated scripts, file system exploits, or payload data
+  const DANGEROUS_SCHEMES = new Set(["data:", "blob:", "file:", "filesystem:"]);
+
+  // Open redirect query parameter names commonly used across platforms
+  const REDIRECT_PARAM_NAMES = new Set([
+    "redirect", "redirect_url", "redirect_to", "return_to", "return",
+    "url", "dest", "destination", "next", "link", "target", "goto",
+    "out", "forward", "redir", "r", "u"
+  ]);
+
   /**
    * Checks if a given hostname is a raw IP address (IPv4, IPv6, or integer notation)
    * @param {string} host - Hostname string
@@ -113,18 +123,18 @@
       return false;
     }
 
-    const cleanHost = hostname.toLowerCase().trim();
+    const cleanHost = hostname.toLowerCase().trim().replace(/\.+$/, "");
 
     return whitelistedDomains.some(entry => {
       if (!entry) return false;
-      let cleanEntry = entry.toLowerCase().trim();
+      let cleanEntry = entry.toLowerCase().trim().replace(/\.+$/, "");
       
       // Strip scheme if present
       if (cleanEntry.startsWith("http://") || cleanEntry.startsWith("https://")) {
         try {
-          cleanEntry = new URL(cleanEntry).hostname;
+          cleanEntry = new URL(cleanEntry).hostname.replace(/\.+$/, "");
         } catch {
-          cleanEntry = cleanEntry.replace(/^https?:\/\//, "");
+          cleanEntry = cleanEntry.replace(/^https?:\/\//, "").replace(/\.+$/, "");
         }
       }
 
@@ -153,7 +163,8 @@
    * @returns {boolean}
    */
   function isSafeDomain(domain) {
-    const cleanDomain = domain.toLowerCase();
+    if (!domain) return false;
+    const cleanDomain = domain.toLowerCase().replace(/\.+$/, "");
     const hostWithoutWww = cleanDomain.startsWith("www.") ? cleanDomain.slice(4) : cleanDomain;
 
     if (SAFE_DOMAINS.has(hostWithoutWww)) {
@@ -169,12 +180,40 @@
   }
 
   /**
+   * Extracts a potential external redirect target URL from query parameters
+   * @param {URL} urlObj - Parsed URL object
+   * @returns {string|null} - Decoded target URL string if found, or null
+   */
+  function extractRedirectTarget(urlObj) {
+    if (!urlObj || !urlObj.searchParams) return null;
+    const pathname = (urlObj.pathname || "").toLowerCase();
+
+    for (const [key, val] of urlObj.searchParams.entries()) {
+      if (!val) continue;
+      const lowerKey = key.toLowerCase();
+      const lowerVal = val.toLowerCase().trim();
+
+      // Known redirect parameter, or 'q' on redirect endpoints (e.g. google /url?q= or youtube /redirect?q=)
+      const isRedirectKey = REDIRECT_PARAM_NAMES.has(lowerKey) ||
+        (lowerKey === "q" && (pathname.includes("/url") || pathname.includes("/redirect") || pathname.includes("/redir")));
+
+      if (isRedirectKey) {
+        if (lowerVal.startsWith("http://") || lowerVal.startsWith("https://") || lowerVal.startsWith("//")) {
+          return val.trim();
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Analyzes the safety of a given URL
    * @param {string} urlString - The URL string to inspect
    * @param {Array<string>} whitelistedDomains - Optional user-configured whitelist
+   * @param {number} _depth - Internal recursion depth guard for redirect analysis
    * @returns {{ safe: boolean, reason: string, severity?: "warning" | "critical", details?: Array<string> }}
    */
-  function analyzeUrlSafety(urlString, whitelistedDomains = []) {
+  function analyzeUrlSafety(urlString, whitelistedDomains = [], _depth = 0) {
     if (!urlString || typeof urlString !== "string") {
       return { safe: false, reason: "Missing or invalid URL parameter", severity: "warning" };
     }
@@ -201,11 +240,64 @@
       return { safe: false, reason: "Invalid or malformed URL", severity: "warning" };
     }
 
-    const domain = urlObj.hostname.toLowerCase();
+    // Check dangerous schemes (data:, blob:, file:, filesystem:)
+    if (DANGEROUS_SCHEMES.has(urlObj.protocol)) {
+      return {
+        safe: false,
+        reason: `Dangerous URI scheme detected (${urlObj.protocol}): potential exploit or obfuscated payload`,
+        severity: "critical"
+      };
+    }
+
+    const domain = urlObj.hostname.toLowerCase().replace(/\.+$/, "");
 
     // Check 1: User Whitelist
     if (isDomainWhitelisted(domain, whitelistedDomains)) {
       return { safe: true, reason: "Domain is in user whitelist" };
+    }
+
+    // Check Open Redirect on Any Domain (including well-known safe platforms)
+    const redirectTarget = extractRedirectTarget(urlObj);
+    if (redirectTarget) {
+      let targetUrl;
+      try {
+        targetUrl = new URL(redirectTarget.startsWith("//") ? "https:" + redirectTarget : redirectTarget);
+      } catch {
+        // Malformed redirect destination
+      }
+
+      if (targetUrl && targetUrl.hostname) {
+        const targetDomain = targetUrl.hostname.toLowerCase().replace(/\.+$/, "");
+        const isInternalRedirect = targetDomain === domain || targetDomain.endsWith("." + domain);
+
+        if (!isInternalRedirect) {
+          // Recursively inspect destination safety if within recursion limit
+          if (_depth < 2) {
+            const destResult = analyzeUrlSafety(targetUrl.href, whitelistedDomains, _depth + 1);
+            if (!destResult.safe) {
+              return {
+                safe: false,
+                reason: `Open redirect leads to unsafe destination (${targetDomain}): ${destResult.reason}`,
+                severity: "critical",
+                details: [`Redirect target: ${targetUrl.href}`, ...(destResult.details || [])]
+              };
+            }
+          }
+
+          // If hosted on a safe domain but redirecting to an unverified external destination
+          if (isSafeDomain(domain)) {
+            const targetIsSafe = isSafeDomain(targetDomain) || isDomainWhitelisted(targetDomain, whitelistedDomains);
+            if (!targetIsSafe) {
+              return {
+                safe: false,
+                reason: `Open redirect on trusted domain pointing to external unverified destination (${targetDomain})`,
+                severity: "warning",
+                details: [`Redirect target: ${targetUrl.href}`]
+              };
+            }
+          }
+        }
+      }
     }
 
     // Check 2: Well-known Safe Domains
@@ -275,22 +367,8 @@
     }
 
     // Heuristic G: Suspicious open redirect parameter pointing to external hosts
-    const redirectParams = ["redirect", "redirect_url", "redirect_to", "return_to", "url", "dest", "destination", "next", "link", "target", "goto"];
-    for (const [key, val] of urlObj.searchParams.entries()) {
-      if (redirectParams.includes(key.toLowerCase())) {
-        const lowerVal = val.toLowerCase().trim();
-        if (lowerVal.startsWith("http://") || lowerVal.startsWith("https://") || lowerVal.startsWith("//")) {
-          try {
-            const targetUrl = new URL(lowerVal.startsWith("//") ? "https:" + lowerVal : lowerVal);
-            if (targetUrl.hostname && targetUrl.hostname !== domain && !targetUrl.hostname.endsWith("." + domain)) {
-              heuristics.push(`Contains external open redirect parameter (${key}) pointing to ${targetUrl.hostname}`);
-              break;
-            }
-          } catch {
-            // Malformed URL in parameter
-          }
-        }
-      }
+    if (redirectTarget) {
+      heuristics.push("Contains external open redirect parameter pointing to external host");
     }
 
     if (heuristics.length > 0) {

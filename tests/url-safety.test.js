@@ -149,4 +149,68 @@ describe("URL Safety Analyzer", () => {
     assert.equal(analyzeUrlSafety("").safe, false);
     assert.equal(analyzeUrlSafety(null).safe, false);
   });
+
+  it("blocks dangerous schemes including data:, blob:, file:, and filesystem:", () => {
+    const dangerousUrls = [
+      "data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==",
+      "data:application/javascript;base64,dmFyIGE9MTs=",
+      "blob:https://evil-site.com/d94943f2-1b1d-405a-8b1b-7a2e2f9d3b4c",
+      "file:///etc/passwd",
+      "file:///C:/Windows/System32/calc.exe",
+      "filesystem:http://example.com/temporary/payload.html"
+    ];
+
+    for (const url of dangerousUrls) {
+      const result = analyzeUrlSafety(url);
+      assert.equal(result.safe, false, `Expected ${url} to be blocked as dangerous`);
+      assert.equal(result.severity, "critical");
+      assert.match(result.reason, /dangerous uri scheme/i);
+    }
+  });
+
+  it("inspects open redirects on safe platforms and flags malicious destinations as critical", () => {
+    // Trusted domain redirecting to known malicious domain -> critical
+    const googlePhish = analyzeUrlSafety("https://www.google.com/url?q=https://win-iphone-now.xyz");
+    assert.equal(googlePhish.safe, false);
+    assert.equal(googlePhish.severity, "critical");
+    assert.match(googlePhish.reason, /unsafe destination/i);
+
+    // Facebook link shim redirecting to known crypto scam -> critical
+    const fbPhish = analyzeUrlSafety("https://l.facebook.com/l.php?u=https://metamask-wallet-recovery.com");
+    assert.equal(fbPhish.safe, false);
+    assert.equal(fbPhish.severity, "critical");
+    assert.match(fbPhish.reason, /unsafe destination/i);
+
+    // YouTube redirect to punycode homograph -> critical
+    const ytHomograph = analyzeUrlSafety("https://www.youtube.com/redirect?q=https://xn--pypal-4ve.com");
+    assert.equal(ytHomograph.safe, false);
+    assert.equal(ytHomograph.severity, "critical");
+
+    // Safe platform redirecting to another safe platform -> safe
+    const googleWiki = analyzeUrlSafety("https://www.google.com/url?q=https://en.wikipedia.org/wiki/Phishing");
+    assert.equal(googleWiki.safe, true);
+
+    // Internal redirect within same safe platform -> safe
+    const googleInternal = analyzeUrlSafety("https://www.google.com/url?q=https://mail.google.com/inbox");
+    assert.equal(googleInternal.safe, true);
+
+    // Safe platform redirecting to unverified external domain -> warning
+    const googleExternal = analyzeUrlSafety("https://www.google.com/url?q=https://some-normal-blog.com/post");
+    assert.equal(googleExternal.safe, false);
+    assert.equal(googleExternal.severity, "warning");
+    assert.match(googleExternal.reason, /external unverified destination/i);
+
+    // Google search query with search string should remain safe
+    const googleSearch = analyzeUrlSafety("https://www.google.com/search?q=https+basics");
+    assert.equal(googleSearch.safe, true);
+  });
+
+  it("handles FQDN with trailing dots gracefully", () => {
+    const trailingDotSafe = analyzeUrlSafety("https://www.google.com./webhp");
+    assert.equal(trailingDotSafe.safe, true);
+
+    const whitelist = ["my-corp.com"];
+    const trailingDotWhitelist = analyzeUrlSafety("https://portal.my-corp.com./login", whitelist);
+    assert.equal(trailingDotWhitelist.safe, true);
+  });
 });

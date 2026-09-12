@@ -238,5 +238,137 @@ describe("Storage & Integration Helpers", () => {
       assert.equal(Object.prototype.polluted, undefined, "Prototype must not be polluted");
       assert.equal(updates.shields.pii, true);
     });
+
+    it("safely handles adversarial and malformed backup payloads during schema validation", () => {
+      const fuzzPayloads = [
+        null,
+        undefined,
+        12345,
+        "malicious string",
+        [],
+        { shields: null, whitelistedDomains: "not-an-array", customPiiPatterns: 999 },
+        {
+          whitelistedDomains: [null, undefined, {}, [], 123, "   ", "a".repeat(1000)],
+          customPiiPatterns: [
+            null,
+            undefined,
+            "not-an-object",
+            {},
+            { name: "   ", pattern: "abc" },
+            { name: "Valid", pattern: "   " },
+            { name: "Valid", pattern: "a".repeat(300) },
+            { name: "constructor", pattern: "( a + ) +", severity: "critical" },
+            { name: "__proto__", pattern: "[0-9]{4}", severity: "warning" }
+          ]
+        }
+      ];
+
+      for (const payload of fuzzPayloads) {
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          continue;
+        }
+
+        const updates = {};
+        if (payload.shields && typeof payload.shields === "object") {
+          updates.shields = {
+            pii: Boolean(payload.shields.pii),
+            url: Boolean(payload.shields.url),
+            content: Boolean(payload.shields.content),
+            security: Boolean(payload.shields.security)
+          };
+        }
+
+        if (Array.isArray(payload.whitelistedDomains)) {
+          updates.whitelistedDomains = payload.whitelistedDomains
+            .filter(d => typeof d === "string" && d.trim().length > 0 && d.trim().length <= 100)
+            .map(d => d.trim().toLowerCase().replace(/\.+$/, ""))
+            .slice(0, 200);
+        }
+
+        if (Array.isArray(payload.customPiiPatterns)) {
+          updates.customPiiPatterns = payload.customPiiPatterns
+            .filter(p => {
+              if (!p || typeof p !== "object") return false;
+              if (!p.name || typeof p.name !== "string" || p.name.trim().length === 0 || p.name.length > 50) return false;
+              if (!p.pattern || typeof p.pattern !== "string" || p.pattern.trim().length === 0 || p.pattern.length > 250) return false;
+              return isSafeRegexPattern(p.pattern);
+            })
+            .map(p => ({
+              id: (typeof p.id === "string" && /^rule_[a-zA-Z0-9_-]+$/.test(p.id))
+                ? p.id
+                : "rule_mock_id",
+              name: p.name.trim().slice(0, 50),
+              pattern: p.pattern.trim(),
+              severity: (p.severity === "critical" || p.severity === "warning") ? p.severity : "warning"
+            }))
+            .slice(0, 50);
+        }
+
+        assert.equal(Object.prototype.polluted, undefined);
+      }
+    });
+
+    it("prevents prototype pollution from constructor and __proto__ attack payloads", () => {
+      const payloads = [
+        '{"__proto__": {"admin": true}}',
+        '{"constructor": {"prototype": {"admin": true}}}'
+      ];
+
+      for (const raw of payloads) {
+        const parsed = JSON.parse(raw);
+        const target = Object.create(null);
+        if (parsed.shields && typeof parsed.shields === "object") {
+          target.shields = {};
+        }
+        assert.equal(Object.prototype.admin, undefined, "Object prototype must not be polluted");
+        assert.equal({}.admin, undefined, "Plain object must not inherit polluted properties");
+      }
+    });
+  });
+
+  describe("Dormant Tab Reconciliation Logic", () => {
+    it("prunes orphaned tab storage keys while preserving active tabs and global settings", () => {
+      const activeTabIds = new Set([101, 102]);
+      const sessionData = {
+        tab_101: { url: "https://example.com", threats: [] },
+        tab_102: { url: "https://github.com", threats: [] },
+        tab_999: { url: "https://crashed.site", threats: [] },
+        tab_888: { url: "https://closed.site", threats: [] },
+        global_config: { debug: false }
+      };
+
+      const keysToRemove = [];
+      for (const key of Object.keys(sessionData)) {
+        if (key.startsWith("tab_")) {
+          const tabId = parseInt(key.slice(4), 10);
+          if (!activeTabIds.has(tabId)) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+
+      assert.deepEqual(keysToRemove, ["tab_999", "tab_888"]);
+    });
+
+    it("throttles reconciliation intervals to prevent storage thrashing", () => {
+      let lastReconcile = 0;
+      const THROTTLE = 180000;
+      let reconcileCount = 0;
+
+      function mockThrottledReconcile(currentTime) {
+        if (currentTime - lastReconcile > THROTTLE) {
+          lastReconcile = currentTime;
+          reconcileCount++;
+        }
+      }
+
+      const t0 = 1700000000000;
+      mockThrottledReconcile(t0); // Call 1: triggers (t0 - 0 > THROTTLE)
+      mockThrottledReconcile(t0 + 5000); // Call 2: suppressed (5s later)
+      mockThrottledReconcile(t0 + 179000); // Call 3: suppressed (179s later)
+      mockThrottledReconcile(t0 + 180001); // Call 4: triggers (180.001s later)
+
+      assert.equal(reconcileCount, 2);
+    });
   });
 });

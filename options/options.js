@@ -48,13 +48,44 @@ document.addEventListener("DOMContentLoaded", () => {
   let localWhitelist = [];
   let localAuditLog = [];
 
-  // Helper to show success notice
-  const triggerSuccessAlert = (message = "Settings updated successfully.") => {
-    saveSuccessAlert.textContent = `✓ ${message}`;
+  let _undoTimer = null;
+  let _preResetSnapshot = null;
+
+  // Helper to show success notice with optional Undo rollback
+  const triggerSuccessAlert = (message = "Settings updated successfully.", undoCallback = null, durationMs = 3000) => {
+    if (_undoTimer) {
+      clearTimeout(_undoTimer);
+      _undoTimer = null;
+    }
+    saveSuccessAlert.replaceChildren();
+
+    const textSpan = document.createElement("span");
+    textSpan.textContent = `✓ ${message}`;
+    saveSuccessAlert.appendChild(textSpan);
+
+    if (typeof undoCallback === "function") {
+      const undoBtn = document.createElement("button");
+      undoBtn.className = "osn-undo-btn";
+      undoBtn.textContent = "Undo";
+      undoBtn.setAttribute("type", "button");
+      undoBtn.onclick = (e) => {
+        e.preventDefault();
+        if (_undoTimer) {
+          clearTimeout(_undoTimer);
+          _undoTimer = null;
+        }
+        saveSuccessAlert.style.display = "none";
+        undoCallback();
+      };
+      saveSuccessAlert.appendChild(undoBtn);
+    }
+
     saveSuccessAlert.style.display = "block";
-    setTimeout(() => {
+    _undoTimer = setTimeout(() => {
       saveSuccessAlert.style.display = "none";
-    }, 3000);
+      _undoTimer = null;
+      _preResetSnapshot = null;
+    }, durationMs);
   };
 
   // Helper to show inline validation errors without blocking thread
@@ -118,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (localPiiRules.length === 0) {
       const emptyNotice = document.createElement("div");
-      emptyNotice.style.cssText = "text-align:center; padding:12px; color:var(--text-muted); font-size:12px;";
+      emptyNotice.className = "osn-empty-row";
       emptyNotice.textContent = "No custom PII filters configured.";
       piiRulesContainer.appendChild(emptyNotice);
       return;
@@ -140,7 +171,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const br = document.createElement("br");
 
       const patternDesc = document.createElement("span");
-      patternDesc.style.fontSize = "11px";
+      patternDesc.className = "pattern-desc";
       patternDesc.textContent = "Pattern: ";
 
       const code = document.createElement("code");
@@ -150,9 +181,8 @@ document.addEventListener("DOMContentLoaded", () => {
       details.append(strongName, badge, br, patternDesc);
 
       const delBtn = document.createElement("button");
-      delBtn.className = "icon-btn delete-pii-btn";
+      delBtn.className = "icon-btn delete-pii-btn osn-delete-btn";
       delBtn.setAttribute("aria-label", `Delete ${rule.name}`);
-      delBtn.style.cssText = "width:26px; height:26px; font-size:12px; color:var(--color-critical)";
       delBtn.textContent = "✕";
       delBtn.onclick = () => deletePiiRule(rule.id);
 
@@ -235,7 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (localWhitelist.length === 0) {
       const emptyNotice = document.createElement("div");
-      emptyNotice.style.cssText = "text-align:center; padding:12px; color:var(--text-muted); font-size:12px;";
+      emptyNotice.className = "osn-empty-row";
       emptyNotice.textContent = "No domains currently whitelisted.";
       whitelistContainer.appendChild(emptyNotice);
       return;
@@ -251,9 +281,8 @@ document.addEventListener("DOMContentLoaded", () => {
       details.appendChild(strong);
 
       const delBtn = document.createElement("button");
-      delBtn.className = "icon-btn delete-whitelist-btn";
+      delBtn.className = "icon-btn delete-whitelist-btn osn-delete-btn";
       delBtn.setAttribute("aria-label", `Remove ${domain} from whitelist`);
-      delBtn.style.cssText = "width:26px; height:26px; font-size:12px; color:var(--color-critical)";
       delBtn.textContent = "✕";
       delBtn.onclick = () => deleteWhitelistDomain(domain);
 
@@ -431,47 +460,69 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Reset Stats Counter
+  // Reset Stats Counter with 10s undo rollback
   resetStatsBtn.addEventListener("click", () => {
     if (confirm("Are you sure you want to reset all shields protection statistics?")) {
-      const defaultStats = {
-        linksScanned: 0,
-        piiBlockedCount: 0,
-        threatsDetected: 0,
-        sitesProtected: 0
-      };
+      chrome.storage.local.get("stats", (existingData) => {
+        const prevStats = existingData ? existingData.stats : null;
+        const defaultStats = {
+          linksScanned: 0,
+          piiBlockedCount: 0,
+          threatsDetected: 0,
+          sitesProtected: 0
+        };
 
-      chrome.storage.local.set({ stats: defaultStats }, () => {
-        renderStats(defaultStats);
-        triggerSuccessAlert("Metrics counter reset to zero.");
+        chrome.storage.local.set({ stats: defaultStats }, () => {
+          renderStats(defaultStats);
+          triggerSuccessAlert("Metrics counter reset to zero.", () => {
+            if (prevStats) {
+              chrome.storage.local.set({ stats: prevStats }, () => {
+                renderStats(prevStats);
+                triggerSuccessAlert("Previous statistics restored.");
+              });
+            }
+          }, 10000);
+        });
       });
     }
   });
 
-  // Factory Reset All settings
+  // Factory Reset All settings with 10s undo rollback
   factoryResetBtn.addEventListener("click", () => {
     if (confirm("Warning: This will restore default shields settings and erase all custom PII rules and whitelists. Proceed?")) {
-      chrome.storage.local.clear(() => {
-        const defaultSettings = {
-          shields: {
-            pii: true,
-            url: true,
-            content: true,
-            security: true
-          },
-          stats: {
-            linksScanned: 0,
-            piiBlockedCount: 0,
-            threatsDetected: 0,
-            sitesProtected: 0
-          },
-          whitelistedDomains: [],
-          customPiiPatterns: []
-        };
+      chrome.storage.local.get(null, (existingData) => {
+        _preResetSnapshot = existingData || {};
+        chrome.storage.local.clear(() => {
+          const defaultSettings = {
+            shields: {
+              pii: true,
+              url: true,
+              content: true,
+              security: true
+            },
+            stats: {
+              linksScanned: 0,
+              piiBlockedCount: 0,
+              threatsDetected: 0,
+              sitesProtected: 0
+            },
+            whitelistedDomains: [],
+            customPiiPatterns: []
+          };
 
-        chrome.storage.local.set(defaultSettings, () => {
-          loadConfig();
-          triggerSuccessAlert("Factory defaults restored.");
+          chrome.storage.local.set(defaultSettings, () => {
+            loadConfig();
+            triggerSuccessAlert("Factory defaults restored.", () => {
+              if (_preResetSnapshot) {
+                chrome.storage.local.clear(() => {
+                  chrome.storage.local.set(_preResetSnapshot, () => {
+                    loadConfig();
+                    triggerSuccessAlert("Previous configuration restored successfully.");
+                  });
+                });
+              }
+            }, 10000);
+          });
         });
       });
     }
@@ -502,7 +553,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const summaryParts = Object.entries(counts).map(([name, count]) => `${count} ${name}`);
 
           const badge = document.createElement("span");
-          badge.style.cssText = "color: #f59e0b; font-weight: 600;";
+          badge.className = "sandbox-badge-warning";
           badge.textContent = `⚠ Redacted ${detected.length} item(s): `;
 
           const detailsText = document.createTextNode(summaryParts.join(", "));
@@ -510,7 +561,7 @@ document.addEventListener("DOMContentLoaded", () => {
           sandboxFindings.appendChild(detailsText);
         } else {
           const safeBadge = document.createElement("span");
-          safeBadge.style.cssText = "color: #10b981; font-weight: 600;";
+          safeBadge.className = "sandbox-badge-safe";
           safeBadge.textContent = "✓ No sensitive PII detected in sample text.";
           sandboxFindings.appendChild(safeBadge);
         }
@@ -570,7 +621,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!Array.isArray(auditEntries) || auditEntries.length === 0) {
       const emptyRow = document.createElement("div");
-      emptyRow.style.cssText = "color: var(--text-secondary); font-size: 12px; font-style: italic; padding: 12px; text-align: center; background: rgba(0,0,0,0.1); border-radius: 8px;";
+      emptyRow.className = "osn-empty-row";
       emptyRow.textContent = "No security threat incidents logged yet. Clean browser session.";
       auditLogContainer.appendChild(emptyRow);
       return;

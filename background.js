@@ -60,6 +60,18 @@ function reconcileOrphanedTabs() {
   });
 }
 
+// Throttled reconciliation to prune crashed/closed tabs during service worker dormancy (at most once every 3 minutes)
+let lastReconcileTime = 0;
+const RECONCILE_THROTTLE_MS = 3 * 60 * 1000;
+
+function throttledReconcileOrphanedTabs() {
+  const now = Date.now();
+  if (now - lastReconcileTime > RECONCILE_THROTTLE_MS) {
+    lastReconcileTime = now;
+    reconcileOrphanedTabs();
+  }
+}
+
 // Reconcile tabs on browser startup
 if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onStartup) {
   chrome.runtime.onStartup.addListener(() => {
@@ -320,11 +332,14 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   getSessionStorage().remove(tabKey);
 });
 
-// Synchronize toolbar badge immediately upon active tab switch
+// Synchronize toolbar badge immediately upon active tab switch and reconcile dormant tabs
 if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.onActivated) {
   chrome.tabs.onActivated.addListener((activeInfo) => {
     const tabId = activeInfo.tabId;
     if (!tabId) return;
+
+    // Prune tabs that closed or crashed while service worker was dormant
+    throttledReconcileOrphanedTabs();
 
     const tabKey = `tab_${tabId}`;
     getSessionStorage().get([tabKey], (result) => {
@@ -421,6 +436,16 @@ if (typeof chrome !== "undefined" && chrome.contextMenus && chrome.contextMenus.
       });
     }
   });
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    reconcileOrphanedTabs,
+    throttledReconcileOrphanedTabs,
+    appendAuditLog,
+    updateGlobalStats,
+    getSessionStorage
+  };
 }
 
 

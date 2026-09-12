@@ -214,14 +214,18 @@
     // 2. Strip escaped characters (e.g. \+, \*, \\) to prevent false positives on escaped literals
     const stripped = trimmed.replace(/\\./g, "");
 
-    // 3. Detect nested quantifiers causing exponential backtracking: e.g. (a+)+, (.*)*, (foo|bar+)+, (a+){2,}
-    const nestedQuantifierRegex = /\([^()]*[+*]\)[+*]|\([^()]*[+*]\)\{[0-9]+,?\d*\}|\([^()]*\{[0-9]+,?\d*\}\)[+*]/;
-    if (nestedQuantifierRegex.test(stripped)) {
+    // 3. Normalize internal whitespace to prevent evasion via spacing e.g. "( a + ) +" or "( a + ) { 2 , }"
+    const noWhitespace = stripped.replace(/\s+/g, "");
+
+    // 4. Detect nested quantifiers causing exponential backtracking:
+    // e.g. (a+)+, (.*)*, (foo|bar+)+, (a+){2,}, (a{1,})+
+    const nestedQuantifierRegex = /\([^()]*[+*]\??\)[+*]|\([^()]*[+*]\??\)\{[0-9]+,?\d*\}|\([^()]*\{[0-9]+,\d*\}\??\)[+*]|\([^()]*\{[0-9]+,\d*\}\??\)\{[0-9]+,?\d*\}/;
+    if (nestedQuantifierRegex.test(noWhitespace)) {
       return false;
     }
 
-    // 4. Detect deeply nested quantified groups: ((a)+)+
-    if (/\((?:[^()]*\([^()]*\)[^()]*)+[+*]\)[+*]/.test(stripped)) {
+    // 5. Detect deeply nested quantified groups: ((a)+)+ or (((a)+)+)
+    if (/\((?:[^()]*\([^()]*\)[^()]*)+[+*]/.test(noWhitespace)) {
       return false;
     }
 

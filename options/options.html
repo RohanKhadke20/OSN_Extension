@@ -5,253 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OSN Guard Settings</title>
   <link rel="stylesheet" href="../popup/popup.css">
-  <style>
-    /* Options page layout additions */
-    body {
-      width: 100%;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      padding: 40px 20px;
-    }
-    .options-wrapper {
-      max-width: 680px;
-      width: 100%;
-      background: var(--card-bg);
-      backdrop-filter: blur(20px);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 30px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    }
-    .options-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--card-border);
-      padding-bottom: 20px;
-      margin-bottom: 24px;
-    }
-    .options-title h1 {
-      font-size: 24px;
-      font-weight: 700;
-      color: #fff;
-    }
-    .options-title p {
-      font-size: 13px;
-      color: var(--text-secondary);
-      margin-top: 4px;
-    }
-    .settings-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
-    .settings-group {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 20px;
-    }
-    .settings-group h3 {
-      font-size: 16px;
-      font-weight: 600;
-      color: #fff;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .input-field, .select-field {
-      width: 100%;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 10px 12px;
-      color: #fff;
-      font-family: var(--font-family);
-      font-size: 13px;
-      margin-top: 6px;
-      transition: all 0.2s;
-    }
-    .input-field:focus, .select-field:focus {
-      outline: none;
-      border-color: var(--color-accent);
-      background: rgba(255,255,255,0.07);
-    }
-    .form-row {
-      margin-bottom: 16px;
-    }
-    .form-row label {
-      font-size: 12px;
-      color: var(--text-secondary);
-      font-weight: 600;
-    }
-    .custom-pii-list, .whitelist-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .item-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: rgba(0,0,0,0.2);
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      border: 1px solid rgba(255,255,255,0.02);
-    }
-    .item-row span {
-      font-family: monospace;
-      color: var(--text-secondary);
-    }
-    .item-row strong {
-      color: #fff;
-      font-family: var(--font-family);
-    }
-    .badge-tag {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-weight: bold;
-      margin-left: 8px;
-      text-transform: uppercase;
-    }
-    .badge-tag.warning {
-      background-color: var(--color-warning-light);
-      color: var(--color-warning);
-    }
-    .badge-tag.critical {
-      background-color: var(--color-critical-light);
-      color: var(--color-critical);
-    }
-    .action-btn {
-      background: var(--color-accent);
-      border: none;
-      color: #fff;
-      font-family: var(--font-family);
-      font-size: 13px;
-      font-weight: 600;
-      padding: 10px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .action-btn:hover {
-      opacity: 0.9;
-      transform: translateY(-1px);
-    }
-    .action-btn.secondary {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--card-border);
-    }
-    .action-btn.secondary:hover {
-      background: rgba(255,255,255,0.1);
-    }
-    .action-btn.danger {
-      background: var(--color-critical-light);
-      color: var(--color-critical);
-      border: 1px solid rgba(239, 68, 68, 0.2);
-    }
-    .action-btn.danger:hover {
-      background: rgba(239, 68, 68, 0.25);
-    }
-    .flex-group {
-      display: flex;
-      gap: 10px;
-      align-items: flex-end;
-    }
-    .success-alert {
-      background-color: var(--color-safe-light);
-      border: 1px solid rgba(16, 185, 129, 0.2);
-      color: var(--color-safe);
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 20px;
-      display: none;
-      animation: osn-guard-fade-in 0.3s;
-    }
-    .error-alert {
-      background-color: var(--color-critical-light);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: var(--color-critical);
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 20px;
-      display: none;
-      animation: osn-guard-fade-in 0.3s;
-    }
-    .stats-summary-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin: 14px 0;
-    }
-    .stats-mini-card {
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--card-border);
-      border-radius: 10px;
-      padding: 10px;
-      text-align: center;
-    }
-    .stats-mini-val {
-      font-size: 18px;
-      font-weight: 700;
-      color: #fff;
-    }
-    .stats-mini-lbl {
-      font-size: 10px;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-    .audit-entry {
-      background: rgba(0,0,0,0.25);
-      border: 1px solid rgba(255,255,255,0.05);
-      border-radius: 8px;
-      padding: 10px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 12px;
-    }
-    .audit-entry-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .audit-entry-title {
-      font-weight: 600;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .audit-entry-time {
-      font-size: 11px;
-      color: var(--text-secondary);
-      font-family: monospace;
-    }
-    .audit-entry-msg {
-      color: #cbd5e1;
-      font-size: 12px;
-      line-height: 1.3;
-    }
-    .audit-entry-target {
-      font-family: monospace;
-      color: #94a3b8;
-      font-size: 11px;
-      word-break: break-all;
-    }
-  </style>
+  <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <div class="options-wrapper">
@@ -274,27 +28,27 @@
       <!-- Custom PII Patterns -->
       <section class="settings-group">
         <h3><span>📝</span> Custom PII Scanning Rules</h3>
-        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+        <p class="section-desc">
           Add regular expressions to monitor input fields for custom sensitive patterns (e.g. employee IDs, ticket formats, account numbers).
         </p>
         
         <div class="flex-group">
-          <div class="form-row" style="flex: 2; margin-bottom: 0;">
+          <div class="form-row form-flex-2">
             <label for="new-pii-name">Rule Name</label>
             <input type="text" id="new-pii-name" class="input-field" placeholder="e.g. Employee ID">
           </div>
-          <div class="form-row" style="flex: 3; margin-bottom: 0;">
+          <div class="form-row form-flex-3">
             <label for="new-pii-pattern">Regex Pattern</label>
             <input type="text" id="new-pii-pattern" class="input-field" placeholder="e.g. \bEMP-\d{5}\b">
           </div>
-          <div class="form-row" style="flex: 1.5; margin-bottom: 0;">
+          <div class="form-row form-flex-1-5">
             <label for="new-pii-severity">Severity</label>
             <select id="new-pii-severity" class="select-field">
               <option value="warning">Warning</option>
               <option value="critical">Critical</option>
             </select>
           </div>
-          <button id="add-pii-btn" class="action-btn" style="height: 38px;">Add</button>
+          <button id="add-pii-btn" class="action-btn btn-h38">Add</button>
         </div>
 
         <div class="custom-pii-list" id="pii-rules-container">
@@ -305,22 +59,22 @@
       <!-- Live PII Redactor & Sanitizer Sandbox -->
       <section class="settings-group">
         <h3><span>🛡️</span> Live PII Redactor & Sanitizer Sandbox</h3>
-        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+        <p class="section-desc">
           Test your custom regex rules and built-in privacy filters against sample text in real time. View redactions and copy sanitized outputs.
         </p>
 
         <div class="form-row">
           <label for="sandbox-input-text">Input Text to Inspect</label>
-          <textarea id="sandbox-input-text" class="input-field" rows="3" style="resize:vertical;" placeholder="Paste sample text containing emails, credit cards, phones, SSNs, or custom regex matches..."></textarea>
+          <textarea id="sandbox-input-text" class="input-field textarea-resizable" rows="3" placeholder="Paste sample text containing emails, credit cards, phones, SSNs, or custom regex matches..."></textarea>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; margin-bottom: 4px;">
-          <label for="sandbox-output-text" style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">Sanitized Output</label>
-          <button id="copy-sanitized-btn" class="action-btn secondary" style="height: 28px; font-size: 11px; padding: 0 10px;">Copy Sanitized</button>
+        <div class="sandbox-output-header">
+          <label for="sandbox-output-text" class="sandbox-output-label">Sanitized Output</label>
+          <button id="copy-sanitized-btn" class="action-btn secondary btn-h28">Copy Sanitized</button>
         </div>
-        <textarea id="sandbox-output-text" class="input-field" rows="3" readonly style="resize:vertical; background:rgba(0,0,0,0.25);" placeholder="Sanitized output with masked PII will appear here..."></textarea>
+        <textarea id="sandbox-output-text" class="input-field textarea-readonly" rows="3" readonly placeholder="Sanitized output with masked PII will appear here..."></textarea>
 
-        <div id="sandbox-findings" style="margin-top: 10px; font-size: 12px; min-height: 18px;">
+        <div id="sandbox-findings" class="sandbox-findings-container">
           <!-- Populated from JS -->
         </div>
       </section>
@@ -328,16 +82,16 @@
       <!-- Whitelist Domain Management -->
       <section class="settings-group">
         <h3><span>🌐</span> Whitelisted Domains</h3>
-        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+        <p class="section-desc">
           Domains listed here will bypass all reputations, link scans, and PII checks. Wildcards (e.g. <code>*.intranet.local</code>) supported.
         </p>
 
         <div class="flex-group">
-          <div class="form-row" style="flex: 1; margin-bottom: 0;">
+          <div class="form-row form-flex-1">
             <label for="new-whitelist-domain">Add Domain</label>
             <input type="text" id="new-whitelist-domain" class="input-field" placeholder="e.g. safe-intranet.local or *.company.com">
           </div>
-          <button id="add-whitelist-btn" class="action-btn" style="height: 38px;">Whitelist</button>
+          <button id="add-whitelist-btn" class="action-btn btn-h38">Whitelist</button>
         </div>
 
         <div class="whitelist-list" id="whitelist-container">
@@ -348,32 +102,32 @@
       <!-- Backup & Portability -->
       <section class="settings-group">
         <h3><span>💾</span> Backup & Portability</h3>
-        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+        <p class="section-desc">
           Export your custom PII rules, whitelist settings, and shield configurations as a JSON file to transfer between devices.
         </p>
-        <div style="display:flex; gap:12px; align-items:center;">
+        <div class="flex-row-gap">
           <button id="export-config-btn" class="action-btn secondary">Export Configuration</button>
-          <label for="import-config-file" class="action-btn secondary" style="cursor:pointer; margin:0;">
+          <label for="import-config-file" class="action-btn secondary file-label-btn">
             Import Configuration
           </label>
-          <input type="file" id="import-config-file" accept=".json" style="display:none;">
+          <input type="file" id="import-config-file" accept=".json" class="file-input-hidden">
         </div>
       </section>
 
       <!-- Security Audit Event Log -->
       <section class="settings-group">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <h3 style="margin:0;"><span>🛡️</span> Security Incident & Audit Log</h3>
-          <div style="display:flex; gap:8px;">
-            <button id="export-audit-btn" class="action-btn secondary" style="padding:4px 10px; font-size:11px; height:28px;">Export JSON</button>
-            <button id="clear-audit-btn" class="action-btn danger" style="padding:4px 10px; font-size:11px; height:28px;">Clear Log</button>
+        <div class="audit-log-header">
+          <h3><span>🛡️</span> Security Incident & Audit Log</h3>
+          <div class="audit-log-actions">
+            <button id="export-audit-btn" class="action-btn secondary btn-compact">Export JSON</button>
+            <button id="clear-audit-btn" class="action-btn danger btn-compact">Clear Log</button>
           </div>
         </div>
-        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+        <p class="section-desc">
           Rolling record of the last 50 threats intercepted by OSN Guard on this browser instance.
         </p>
 
-        <div id="audit-log-container" class="audit-log-container" style="max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+        <div id="audit-log-container" class="audit-log-scroll">
           <!-- Populated from JS -->
         </div>
       </section>
@@ -381,7 +135,7 @@
       <!-- Stats and Data Options -->
       <section class="settings-group">
         <h3><span>📊</span> Data & Statistics Control</h3>
-        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+        <p class="section-desc">
           Live metrics collected by your OSN Guard local client. All data stays strictly on your device.
         </p>
 
@@ -404,7 +158,7 @@
           </div>
         </div>
         
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+        <div class="data-actions">
           <button id="reset-stats-btn" class="action-btn danger">Reset Metrics Counter</button>
           <button id="factory-reset-btn" class="action-btn danger">Restore Factory Defaults</button>
         </div>

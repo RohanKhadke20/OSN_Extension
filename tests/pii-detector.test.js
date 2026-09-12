@@ -331,6 +331,41 @@ describe("PII Leak Detector", () => {
       }
     });
 
+    it("rejects obfuscated, whitespace-padded, and variably quantified ReDoS variations", () => {
+      const adversarialPatterns = [
+        "( a + ) +",
+        "( a + ) { 2 , }",
+        "( a { 1 , } ) +",
+        "( a { 2 , 5 } ) { 2 , }",
+        "( a + ? ) +",
+        "( [0-9]+ ) *",
+        "( ( a ) + ) +",
+        "( a | b + ) +",
+        "( [a-z]+ ) { 2 , }",
+        "((a+)+)+",
+        "(?:(?:[a-z]+)+)+"
+      ];
+
+      for (const pat of adversarialPatterns) {
+        assert.equal(isSafeRegexPattern(pat), false, `Expected ReDoS rejection for adversarial: ${pat}`);
+        const compiled = getCompiledCustomRegex(pat);
+        assert.equal(compiled, null, `Expected null compiled regex for: ${pat}`);
+      }
+    });
+
+    it("permits safe patterns with non-nested quantifiers or fixed repetitions", () => {
+      const safePatterns = [
+        "\\b(?:\\d{4}-){3}\\d{4}\\b",
+        "[A-Z]{2,4}-[0-9]{4,6}",
+        "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+        "(https?|ftp)://[a-zA-Z0-9.-]+"
+      ];
+
+      for (const pat of safePatterns) {
+        assert.equal(isSafeRegexPattern(pat), true, `Expected safe pattern to pass: ${pat}`);
+      }
+    });
+
     it("rejects invalid syntax, empty strings, and oversized patterns", () => {
       assert.equal(isSafeRegexPattern(""), false);
       assert.equal(isSafeRegexPattern(null), false);

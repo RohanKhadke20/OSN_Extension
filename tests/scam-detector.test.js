@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { detectScamContent } = require("../core/scam-analyzer.js");
+const { detectScamContent, buildAhoCorasick, searchAhoCorasick } = require("../core/scam-analyzer.js");
 
 describe("Scam & Fraud Content Detector", () => {
   it("detects cryptocurrency giveaway and doubling scams", () => {
@@ -359,4 +359,42 @@ describe("Scam & Fraud Content Detector", () => {
       assert.equal(res.zeroWidthObfuscation, true);
     }
   });
+
+  describe("Aho-Corasick Multi-Pattern Trie Automaton", () => {
+    const customRules = [
+      { id: "rule-a", keywords: ["he", "she", "his", "hers"] },
+      { id: "rule-b", keywords: ["crypto", "cryptocurrency", "airdrop"] },
+      { id: "rule-c", keywords: ["send eth", "send btc"] }
+    ];
+
+    const automaton = buildAhoCorasick(customRules);
+
+    it("matches multiple keywords simultaneously in linear time", () => {
+      const text = "she said that his crypto airdrop was legit";
+      const matches = searchAhoCorasick(text.toLowerCase(), automaton);
+
+      const foundWords = matches.map(m => m.keyword);
+      assert.ok(foundWords.includes("she"));
+      assert.ok(foundWords.includes("he")); // 'he' is a substring of 'she'
+      assert.ok(foundWords.includes("his"));
+      assert.ok(foundWords.includes("crypto"));
+      assert.ok(foundWords.includes("airdrop"));
+    });
+
+    it("handles overlapping prefixes with failure links correctly", () => {
+      const text = "check this cryptocurrency token";
+      const matches = searchAhoCorasick(text.toLowerCase(), automaton);
+
+      const foundWords = matches.map(m => m.keyword);
+      assert.ok(foundWords.includes("crypto"));
+      assert.ok(foundWords.includes("cryptocurrency"));
+    });
+
+    it("returns empty array when no keywords match", () => {
+      const text = "an ordinary harmless post about cooking";
+      const matches = searchAhoCorasick(text.toLowerCase(), automaton);
+      assert.equal(matches.length, 0);
+    });
+  });
 });
+

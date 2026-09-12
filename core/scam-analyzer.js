@@ -377,6 +377,85 @@
   const ZERO_WIDTH_REGEX = /[\u200B-\u200D\u200E\u200F\uFEFF\u2060\u00AD\u202A-\u202E\u2066-\u2069]/g;
 
   /**
+   * Fast Aho-Corasick Multi-Pattern Automaton for sub-millisecond keyword matching
+   */
+  function buildAhoCorasick(rules) {
+    const root = { next: new Map(), fail: null, output: [] };
+
+    // 1. Build Trie
+    for (const rule of rules) {
+      if (!rule.keywords) continue;
+      for (const kw of rule.keywords) {
+        const lowerKw = kw.toLowerCase();
+        let curr = root;
+        for (let i = 0; i < lowerKw.length; i++) {
+          const ch = lowerKw[i];
+          if (!curr.next.has(ch)) {
+            curr.next.set(ch, { next: new Map(), fail: null, output: [] });
+          }
+          curr = curr.next.get(ch);
+        }
+        curr.output.push({ rule, keyword: kw });
+      }
+    }
+
+    // 2. Build Failure Links using BFS
+    const queue = [];
+    for (const [ch, child] of root.next) {
+      child.fail = root;
+      queue.push(child);
+    }
+
+    while (queue.length > 0) {
+      const curr = queue.shift();
+
+      for (const [ch, child] of curr.next) {
+        let f = curr.fail;
+        while (f && !f.next.has(ch)) {
+          f = f.fail;
+        }
+        child.fail = f ? f.next.get(ch) : root;
+        if (child.fail.output.length > 0) {
+          child.output = child.output.concat(child.fail.output);
+        }
+        queue.push(child);
+      }
+    }
+
+    return root;
+  }
+
+  /**
+   * Searches text using precompiled Aho-Corasick automaton
+   * @param {string} text - Lowercase text to search
+   * @param {object} root - Automaton root
+   * @returns {Array<{ rule: object, keyword: string }>}
+   */
+  function searchAhoCorasick(text, root) {
+    const results = [];
+    let curr = root;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      while (curr && !curr.next.has(ch)) {
+        curr = curr.fail;
+      }
+      curr = curr ? curr.next.get(ch) : root;
+
+      if (curr.output.length > 0) {
+        for (let j = 0; j < curr.output.length; j++) {
+          results.push(curr.output[j]);
+        }
+      }
+    }
+
+    return results;
+  }
+
+  // Precompile Aho-Corasick automaton once at module initialization
+  const KEYWORD_AUTOMATON = buildAhoCorasick(SCAM_RULES);
+
+  /**
    * Analyzes text content for scam, fraud, or phishing indicators
    * Detects hidden zero-width character evasion and prioritizes critical severity matches
    * @param {string} text - The post or message content
@@ -391,61 +470,84 @@
     const sanitizedText = hasZeroWidth ? text.replace(ZERO_WIDTH_REGEX, "") : text;
     const lowerRaw = text.toLowerCase();
     const lowerSanitized = hasZeroWidth ? sanitizedText.toLowerCase() : lowerRaw;
-    const matches = [];
 
-    for (const rule of SCAM_RULES) {
-      let matched = false;
-      let matchedTerm = null;
-      let matchedViaSanitization = false;
+    const matchedRuleMap = new Map();
 
-      // 1. Keyword check (raw and zero-width stripped)
-      if (rule.keywords) {
-        for (const keyword of rule.keywords) {
-          if (lowerRaw.includes(keyword)) {
-            matched = true;
-            matchedTerm = keyword;
-            break;
-          } else if (hasZeroWidth && lowerSanitized.includes(keyword)) {
-            matched = true;
-            matchedTerm = keyword;
-            matchedViaSanitization = true;
-            break;
-          }
-        }
-      }
-
-      // 2. Pattern check (raw and zero-width stripped)
-      if (!matched && rule.patterns) {
-        for (const pattern of rule.patterns) {
-          if (pattern.test(lowerRaw)) {
-            matched = true;
-            matchedTerm = pattern.source;
-            break;
-          } else if (hasZeroWidth && pattern.test(lowerSanitized)) {
-            matched = true;
-            matchedTerm = pattern.source;
-            matchedViaSanitization = true;
-            break;
-          }
-        }
-      }
-
-      if (matched) {
-        matches.push({
-          flagged: true,
-          id: rule.id,
-          category: rule.category,
-          reason: rule.reason,
-          severity: rule.severity,
-          matchedKeyword: matchedTerm,
-          containsZeroWidth: hasZeroWidth,
-          zeroWidthObfuscation: matchedViaSanitization
+    // 1. High-speed multi-pattern Aho-Corasick keyword search
+    const rawMatches = searchAhoCorasick(lowerRaw, KEYWORD_AUTOMATON);
+    for (let i = 0; i < rawMatches.length; i++) {
+      const m = rawMatches[i];
+      if (!matchedRuleMap.has(m.rule.id)) {
+        matchedRuleMap.set(m.rule.id, {
+          rule: m.rule,
+          matchedTerm: m.keyword,
+          matchedViaSanitization: false
         });
       }
     }
 
-    if (matches.length === 0) {
+    if (hasZeroWidth) {
+      const sanitizedMatches = searchAhoCorasick(lowerSanitized, KEYWORD_AUTOMATON);
+      for (let i = 0; i < sanitizedMatches.length; i++) {
+        const m = sanitizedMatches[i];
+        const existing = matchedRuleMap.get(m.rule.id);
+        if (!existing) {
+          matchedRuleMap.set(m.rule.id, {
+            rule: m.rule,
+            matchedTerm: m.keyword,
+            matchedViaSanitization: true
+          });
+        } else if (!existing.matchedViaSanitization && m.keyword.length > existing.matchedTerm.length) {
+          matchedRuleMap.set(m.rule.id, {
+            rule: m.rule,
+            matchedTerm: m.keyword,
+            matchedViaSanitization: true
+          });
+        }
+      }
+    }
+
+    // 2. Pattern check for rules with regex patterns (or rules not yet matched by keywords)
+    for (let i = 0; i < SCAM_RULES.length; i++) {
+      const rule = SCAM_RULES[i];
+      if (matchedRuleMap.has(rule.id) || !rule.patterns) continue;
+
+      for (let j = 0; j < rule.patterns.length; j++) {
+        const pattern = rule.patterns[j];
+        if (pattern.test(lowerRaw)) {
+          matchedRuleMap.set(rule.id, {
+            rule,
+            matchedTerm: pattern.source,
+            matchedViaSanitization: false
+          });
+          break;
+        } else if (hasZeroWidth && pattern.test(lowerSanitized)) {
+          matchedRuleMap.set(rule.id, {
+            rule,
+            matchedTerm: pattern.source,
+            matchedViaSanitization: true
+          });
+          break;
+        }
+      }
+    }
+
+    if (matchedRuleMap.size === 0) {
       return { flagged: false };
+    }
+
+    const matches = [];
+    for (const [, item] of matchedRuleMap) {
+      matches.push({
+        flagged: true,
+        id: item.rule.id,
+        category: item.rule.category,
+        reason: item.rule.reason,
+        severity: item.rule.severity,
+        matchedKeyword: item.matchedTerm,
+        containsZeroWidth: hasZeroWidth,
+        zeroWidthObfuscation: item.matchedViaSanitization
+      });
     }
 
     // Always surface critical threats first
@@ -461,6 +563,9 @@
   return {
     detectScamContent,
     SCAM_RULES,
-    ZERO_WIDTH_REGEX
+    ZERO_WIDTH_REGEX,
+    buildAhoCorasick,
+    searchAhoCorasick
   };
 });
+

@@ -295,4 +295,46 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
 
     page.close();
   });
+
+  it("processes pathological DOM node bursts (1,000 links) gracefully within memory limits", async () => {
+    const testPageUrl = `http://127.0.0.1:${httpPort}/test-page.html`;
+    const page = await browser.openPage(testPageUrl);
+
+    // Inject 1,000 links in a single burst
+    await page.evaluate(`
+      (() => {
+        const container = document.createElement("div");
+        container.id = "pathological-container";
+        for (let i = 0; i < 1000; i++) {
+          const a = document.createElement("a");
+          a.href = "https://example" + i + ".com";
+          a.textContent = "Test Link " + i;
+          container.appendChild(a);
+        }
+        document.body.appendChild(container);
+      })()
+    `);
+
+    // Wait for content script to process up to the batch limit without crashing or freezing
+    await page.waitForFunction(() => {
+      const scannedCount = document.querySelectorAll("a[data-osn-scanned]").length;
+      return scannedCount >= 50;
+    }, 8000, 200);
+
+    const stats = await page.evaluate(`
+      (() => {
+        return {
+          totalLinks: document.querySelectorAll("#pathological-container a").length,
+          scannedLinks: document.querySelectorAll("#pathological-container a[data-osn-scanned]").length,
+          hasBody: Boolean(document.body)
+        };
+      })()
+    `);
+
+    assert.equal(stats.totalLinks, 1000);
+    assert.ok(stats.scannedLinks >= 50, "Expected at least 50 links processed in batch");
+    assert.ok(stats.scannedLinks <= 500, "Should respect MAX_PAGE_LINKS_LIMIT of 500");
+
+    page.close();
+  });
 });

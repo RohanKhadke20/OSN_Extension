@@ -11,6 +11,14 @@
   const BATCH_TIME_BUDGET_MS = 10;
   const MAX_CONTAINERS_PER_BATCH = 30;
   const MAX_LINKS_PER_BATCH = 50;
+  const MAX_PAGE_LINKS_LIMIT = 500;
+  const MAX_PAGE_CONTAINERS_LIMIT = 200;
+
+  let totalLinksScannedOnPage = 0;
+  let totalContainersScannedOnPage = 0;
+  let domObserver = null;
+  let scanTimeout = null;
+
   let batchScheduleId = null;
   let isBatchRunning = false;
 
@@ -26,6 +34,56 @@
         clearTimeout(batchScheduleId);
       }
       batchScheduleId = null;
+    }
+  }
+
+  function teardownScanner() {
+    cancelScheduledBatches();
+    if (domObserver) {
+      try { domObserver.disconnect(); } catch { /* ignore */ }
+      domObserver = null;
+    }
+    if (scanTimeout) {
+      clearTimeout(scanTimeout);
+      scanTimeout = null;
+    }
+    if (bannerRafId !== null) {
+      cancelAnimationFrame(bannerRafId);
+      bannerRafId = null;
+    }
+    try {
+      document.removeEventListener("input", handleInputEvent, true);
+      document.removeEventListener("paste", handleInputEvent, true);
+      window.removeEventListener("scroll", scheduleBannerUpdate);
+      window.removeEventListener("resize", scheduleBannerUpdate);
+      window.removeEventListener("pagehide", cancelScheduledBatches);
+      window.removeEventListener("beforeunload", cancelScheduledBatches);
+    } catch { /* ignore */ }
+    isScannerInitialized = false;
+  }
+
+  function safeSendMessage(message, callback) {
+    try {
+      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.id) {
+        teardownScanner();
+        return;
+      }
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          const msg = chrome.runtime.lastError.message || "";
+          if (msg.includes("Extension context invalidated") || msg.includes("Could not establish connection")) {
+            teardownScanner();
+            return;
+          }
+        }
+        if (typeof callback === "function") {
+          callback(response);
+        }
+      });
+    } catch (err) {
+      if (err && err.message && err.message.includes("Extension context invalidated")) {
+        teardownScanner();
+      }
     }
   }
 
@@ -110,12 +168,23 @@
 
   // Load configuration from extension storage
   function loadSettings(callback) {
-    chrome.storage.local.get(["shields", "whitelistedDomains", "customPiiPatterns"], (data) => {
-      if (data.shields) shields = data.shields;
-      if (data.whitelistedDomains) localWhitelisted = data.whitelistedDomains;
-      if (data.customPiiPatterns) customPii = data.customPiiPatterns;
-      if (callback) callback();
-    });
+    try {
+      if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+        teardownScanner();
+        return;
+      }
+      chrome.storage.local.get(["shields", "whitelistedDomains", "customPiiPatterns"], (data) => {
+        if (chrome.runtime.lastError) {
+          return;
+        }
+        if (data && data.shields) shields = data.shields;
+        if (data && data.whitelistedDomains) localWhitelisted = data.whitelistedDomains;
+        if (data && data.customPiiPatterns) customPii = data.customPiiPatterns;
+        if (callback) callback();
+      });
+    } catch {
+      teardownScanner();
+    }
   }
 
   // Check if current hostname is whitelisted
@@ -127,7 +196,8 @@
   }
 
   // Watch for real-time setting changes
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local") {
       loadSettings(() => {
         if (isCurrentSiteWhitelisted()) {
@@ -146,6 +216,7 @@
       });
     }
   });
+}
 
   // Listen for background commands (e.g. manual rescan request or context-menu scan results)
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -276,6 +347,8 @@
     document.querySelectorAll(`[${SCANNED_ATTR}]`).forEach(el => el.removeAttribute(SCANNED_ATTR));
     document.querySelectorAll("[data-osn-badged]").forEach(el => el.removeAttribute("data-osn-badged"));
     pageThreats = [];
+    totalLinksScannedOnPage = 0;
+    totalContainersScannedOnPage = 0;
     isInitialReportDone = false;
     scanPage();
   }
@@ -327,8 +400,7 @@
     setTimeout(scanPage, 1000);
 
     // Dynamic content observer for infinite scrolling feeds
-    let scanTimeout = null;
-    const observer = new MutationObserver((mutations) => {
+    domObserver = new MutationObserver((mutations) => {
       // Ignore mutations caused exclusively by OSN Guard elements
       const isExternalMutation = mutations.some(m => {
         return Array.from(m.addedNodes).some(node => {
@@ -342,13 +414,13 @@
 
       if (!isExternalMutation) return;
 
-      clearTimeout(scanTimeout);
+      if (scanTimeout) clearTimeout(scanTimeout);
       cancelScheduledBatches();
       scanTimeout = setTimeout(scanPage, 800);
     });
 
     if (document.body) {
-      observer.observe(document.body, { childList: true, subtree: true });
+      domObserver.observe(document.body, { childList: true, subtree: true });
     }
 
     // Event listeners for interactive inputs
@@ -388,22 +460,24 @@
     const pendingBadges = [];
 
     try {
-      // 1. LINK REPUTATION SCAN (Batched)
-      if (shields.url) {
-        const links = Array.from(document.querySelectorAll(`a:not([${SCANNED_ATTR}])`));
-        const batchLinks = links.slice(0, MAX_LINKS_PER_BATCH);
-        if (links.length > MAX_LINKS_PER_BATCH) {
+      // 1. LINK REPUTATION SCAN (Batched & Bounded)
+      if (shields.url && totalLinksScannedOnPage < MAX_PAGE_LINKS_LIMIT) {
+        const remainingCapacity = MAX_PAGE_LINKS_LIMIT - totalLinksScannedOnPage;
+        const links = document.querySelectorAll(`a:not([${SCANNED_ATTR}])`);
+        const batchSize = Math.min(links.length, MAX_LINKS_PER_BATCH, remainingCapacity);
+        if (links.length > batchSize && totalLinksScannedOnPage + batchSize < MAX_PAGE_LINKS_LIMIT) {
           hasMoreWork = true;
         }
 
-        for (let i = 0; i < batchLinks.length; i++) {
+        for (let i = 0; i < batchSize; i++) {
           if (performance.now() - batchStartTime > BATCH_TIME_BUDGET_MS) {
             hasMoreWork = true;
             break;
           }
 
-          const link = batchLinks[i];
+          const link = links[i];
           link.setAttribute(SCANNED_ATTR, "true");
+          totalLinksScannedOnPage++;
 
           const href = link.href;
           if (!href || href.startsWith("javascript:") || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
@@ -428,9 +502,9 @@
               pendingBadges.push({ type: "url", element: link, threat });
             }
           } else {
-            // Fallback to background worker
-            chrome.runtime.sendMessage({ action: "checkUrlSafety", url: href }, (response) => {
-              if (chrome.runtime.lastError || !response || response.safe) return;
+            // Fallback to background worker via safeSendMessage
+            safeSendMessage({ action: "checkUrlSafety", url: href }, (response) => {
+              if (!response || response.safe) return;
               const threat = {
                 id: "url-" + Math.random().toString(36).substring(2, 11),
                 type: "Phishing / Malicious Link",
@@ -446,21 +520,23 @@
       }
 
       // 2. SCAM & SPAM CONTENT DETECTION (Batched within remaining frame budget)
-      if (shields.content && (performance.now() - batchStartTime < BATCH_TIME_BUDGET_MS)) {
+      if (shields.content && totalContainersScannedOnPage < MAX_PAGE_CONTAINERS_LIMIT && (performance.now() - batchStartTime < BATCH_TIME_BUDGET_MS)) {
+        const remainingContainerCapacity = MAX_PAGE_CONTAINERS_LIMIT - totalContainersScannedOnPage;
         const containers = getSocialTextContainers();
-        const batchContainers = containers.slice(0, MAX_CONTAINERS_PER_BATCH);
-        if (containers.length > MAX_CONTAINERS_PER_BATCH) {
+        const batchSize = Math.min(containers.length, MAX_CONTAINERS_PER_BATCH, remainingContainerCapacity);
+        if (containers.length > batchSize && totalContainersScannedOnPage + batchSize < MAX_PAGE_CONTAINERS_LIMIT) {
           hasMoreWork = true;
         }
 
-        for (let i = 0; i < batchContainers.length; i++) {
+        for (let i = 0; i < batchSize; i++) {
           if (performance.now() - batchStartTime > BATCH_TIME_BUDGET_MS) {
             hasMoreWork = true;
             break;
           }
 
-          const container = batchContainers[i];
+          const container = containers[i];
           container.setAttribute(SCANNED_ATTR, "true");
+          totalContainersScannedOnPage++;
           const text = container.textContent || "";
           if (!text.trim()) continue;
 
@@ -482,7 +558,7 @@
             pendingBadges.push({ type: "content", element: container, threat });
           }
         }
-      } else if (shields.content) {
+      } else if (shields.content && totalContainersScannedOnPage < MAX_PAGE_CONTAINERS_LIMIT) {
         hasMoreWork = true;
       }
 
@@ -627,7 +703,7 @@
       }
     });
 
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       action: "reportThreats",
       threats: pageThreats,
       statsUpdate: statsUpdate
@@ -852,7 +928,7 @@
       const now = Date.now();
       if (!element._lastPiiReportTime || now - element._lastPiiReportTime > 15000) {
         element._lastPiiReportTime = now;
-        chrome.runtime.sendMessage({ action: "incrementPiiBlocked" });
+        safeSendMessage({ action: "incrementPiiBlocked" });
       }
     }
 

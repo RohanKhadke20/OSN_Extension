@@ -2,6 +2,7 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const { isDomainWhitelisted, isSafeDomain } = require("../core/url-analyzer.js");
 const { detectPii, isSafeRegexPattern } = require("../core/pii-analyzer.js");
+const { sanitizeAndRepairStorage } = require("../background.js");
 
 describe("Storage & Integration Helpers", () => {
   describe("Domain Whitelist Matching Logic", () => {
@@ -369,6 +370,90 @@ describe("Storage & Integration Helpers", () => {
       mockThrottledReconcile(t0 + 180001); // Call 4: triggers (180.001s later)
 
       assert.equal(reconcileCount, 2);
+    });
+  });
+
+  describe("Storage Self-Healing & Schema Auto-Recovery", () => {
+    it("heals null, undefined, or primitive storage payloads with full default schema", () => {
+      const brokenPayloads = [null, undefined, 123, "corrupted", []];
+
+      for (const broken of brokenPayloads) {
+        const { updates, needsRepair } = sanitizeAndRepairStorage(broken);
+        assert.equal(needsRepair, true);
+        assert.deepEqual(updates.shields, { pii: true, url: true, content: true, security: true });
+        assert.deepEqual(updates.stats, { linksScanned: 0, piiBlockedCount: 0, threatsDetected: 0, sitesProtected: 0 });
+        assert.deepEqual(updates.whitelistedDomains, []);
+        assert.deepEqual(updates.customPiiPatterns, []);
+        assert.deepEqual(updates.auditLog, []);
+      }
+    });
+
+    it("repairs corrupted or non-boolean shields settings without altering valid toggles", () => {
+      const corruptedData = {
+        shields: {
+          pii: true,
+          url: "not-a-bool",
+          content: null,
+          security: false
+        }
+      };
+
+      const { updates, needsRepair } = sanitizeAndRepairStorage(corruptedData);
+      assert.equal(needsRepair, true);
+      assert.deepEqual(updates.shields, {
+        pii: true,
+        url: true,
+        content: true,
+        security: false
+      });
+    });
+
+    it("repairs NaN, negative values, and non-integer numbers in stats counters", () => {
+      const corruptedStats = {
+        stats: {
+          linksScanned: NaN,
+          piiBlockedCount: -10,
+          threatsDetected: 4.8,
+          sitesProtected: "five"
+        }
+      };
+
+      const { updates, needsRepair } = sanitizeAndRepairStorage(corruptedStats);
+      assert.equal(needsRepair, true);
+      assert.deepEqual(updates.stats, {
+        linksScanned: 0,
+        piiBlockedCount: 0,
+        threatsDetected: 4,
+        sitesProtected: 0
+      });
+    });
+
+    it("repairs non-array or corrupted whitelistedDomains and customPiiPatterns", () => {
+      const corruptedArrays = {
+        whitelistedDomains: { domain: "example.com" },
+        customPiiPatterns: "invalid string",
+        auditLog: 42
+      };
+
+      const { updates, needsRepair } = sanitizeAndRepairStorage(corruptedArrays);
+      assert.equal(needsRepair, true);
+      assert.deepEqual(updates.whitelistedDomains, []);
+      assert.deepEqual(updates.customPiiPatterns, []);
+      assert.deepEqual(updates.auditLog, []);
+    });
+
+    it("returns needsRepair: false when storage schema is already completely valid", () => {
+      const validData = {
+        shields: { pii: true, url: false, content: true, security: true },
+        stats: { linksScanned: 150, piiBlockedCount: 3, threatsDetected: 2, sitesProtected: 5 },
+        whitelistedDomains: ["safe.internal.net", "*.example.com"],
+        customPiiPatterns: [{ name: "Employee Code", pattern: "EMP-[0-9]{4}" }],
+        auditLog: []
+      };
+
+      const { updates, needsRepair } = sanitizeAndRepairStorage(validData);
+      assert.equal(needsRepair, false);
+      assert.deepEqual(updates, {});
     });
   });
 });

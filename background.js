@@ -72,58 +72,133 @@ function throttledReconcileOrphanedTabs() {
   }
 }
 
-// Reconcile tabs on browser startup
+/**
+ * Verifies and self-heals local extension storage schema.
+ * Restores defaults for missing or corrupted keys without overwriting intact user data.
+ * @param {Object} data - Raw storage items retrieved from chrome.storage.local
+ * @returns {{ updates: Object, needsRepair: boolean }}
+ */
+function sanitizeAndRepairStorage(data) {
+  const updates = {};
+  let needsRepair = false;
+
+  // 1. Shields verification (must be an object of 4 booleans)
+  if (!data || !data.shields || typeof data.shields !== "object" || Array.isArray(data.shields)) {
+    updates.shields = { pii: true, url: true, content: true, security: true };
+    needsRepair = true;
+  } else {
+    const s = data.shields;
+    const repairedShields = {
+      pii: typeof s.pii === "boolean" ? s.pii : true,
+      url: typeof s.url === "boolean" ? s.url : true,
+      content: typeof s.content === "boolean" ? s.content : true,
+      security: typeof s.security === "boolean" ? s.security : true
+    };
+    if (s.pii !== repairedShields.pii || s.url !== repairedShields.url ||
+        s.content !== repairedShields.content || s.security !== repairedShields.security) {
+      updates.shields = repairedShields;
+      needsRepair = true;
+    }
+  }
+
+  // 2. Stats verification (must be an object with non-negative integer counters)
+  if (!data || !data.stats || typeof data.stats !== "object" || Array.isArray(data.stats)) {
+    updates.stats = { linksScanned: 0, piiBlockedCount: 0, threatsDetected: 0, sitesProtected: 0 };
+    needsRepair = true;
+  } else {
+    const st = data.stats;
+    const repairedStats = {
+      linksScanned: (typeof st.linksScanned === "number" && Number.isFinite(st.linksScanned) && st.linksScanned >= 0)
+        ? Math.floor(st.linksScanned) : 0,
+      piiBlockedCount: (typeof st.piiBlockedCount === "number" && Number.isFinite(st.piiBlockedCount) && st.piiBlockedCount >= 0)
+        ? Math.floor(st.piiBlockedCount) : 0,
+      threatsDetected: (typeof st.threatsDetected === "number" && Number.isFinite(st.threatsDetected) && st.threatsDetected >= 0)
+        ? Math.floor(st.threatsDetected) : 0,
+      sitesProtected: (typeof st.sitesProtected === "number" && Number.isFinite(st.sitesProtected) && st.sitesProtected >= 0)
+        ? Math.floor(st.sitesProtected) : 0
+    };
+    if (st.linksScanned !== repairedStats.linksScanned || st.piiBlockedCount !== repairedStats.piiBlockedCount ||
+        st.threatsDetected !== repairedStats.threatsDetected || st.sitesProtected !== repairedStats.sitesProtected) {
+      updates.stats = repairedStats;
+      needsRepair = true;
+    }
+  }
+
+  // 3. Whitelisted domains verification (must be an array of strings)
+  if (!data || !Array.isArray(data.whitelistedDomains)) {
+    updates.whitelistedDomains = [];
+    needsRepair = true;
+  } else {
+    const filteredDomains = data.whitelistedDomains.filter(d => typeof d === "string" && d.trim().length > 0 && d.trim().length <= 100);
+    if (filteredDomains.length !== data.whitelistedDomains.length) {
+      updates.whitelistedDomains = filteredDomains;
+      needsRepair = true;
+    }
+  }
+
+  // 4. Custom PII Patterns verification (must be an array of objects)
+  if (!data || !Array.isArray(data.customPiiPatterns)) {
+    updates.customPiiPatterns = [];
+    needsRepair = true;
+  } else {
+    const filteredPatterns = data.customPiiPatterns.filter(p => p && typeof p === "object" && typeof p.name === "string" && typeof p.pattern === "string");
+    if (filteredPatterns.length !== data.customPiiPatterns.length) {
+      updates.customPiiPatterns = filteredPatterns;
+      needsRepair = true;
+    }
+  }
+
+  // 5. Audit log verification (must be an array)
+  if (!data || !Array.isArray(data.auditLog)) {
+    updates.auditLog = [];
+    needsRepair = true;
+  }
+
+  return { updates, needsRepair };
+}
+
+// Auto-repair storage schema and ensure defaults
+function ensureStorageIntegrity(callback) {
+  if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+    if (callback) callback();
+    return;
+  }
+
+  chrome.storage.local.get(["shields", "stats", "whitelistedDomains", "customPiiPatterns", "auditLog"], (data) => {
+    if (chrome.runtime.lastError) {
+      if (callback) callback();
+      return;
+    }
+
+    const { updates, needsRepair } = sanitizeAndRepairStorage(data);
+    if (needsRepair && Object.keys(updates).length > 0) {
+      chrome.storage.local.set(updates, () => {
+        if (callback) callback();
+      });
+    } else {
+      if (callback) callback();
+    }
+  });
+}
+
+// Reconcile tabs and ensure storage integrity on browser startup
 if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onStartup) {
   chrome.runtime.onStartup.addListener(() => {
     reconcileOrphanedTabs();
+    ensureStorageIntegrity();
   });
 }
 
 // Initialize default settings on install or update
-chrome.runtime.onInstalled.addListener(() => {
-  setupContextMenus();
-  reconcileOrphanedTabs();
-
-  chrome.storage.local.get(["shields", "stats", "whitelistedDomains", "customPiiPatterns"], (data) => {
-    const defaults = {};
-
-    if (!data.shields) {
-      defaults.shields = {
-        pii: true,
-        url: true,
-        content: true,
-        security: true
-      };
-    }
-
-    if (!data.stats) {
-      defaults.stats = {
-        linksScanned: 0,
-        piiBlockedCount: 0,
-        threatsDetected: 0,
-        sitesProtected: 0
-      };
-    }
-
-    if (!data.whitelistedDomains) {
-      defaults.whitelistedDomains = [];
-    }
-
-    if (!data.customPiiPatterns) {
-      defaults.customPiiPatterns = [];
-    }
-
-    if (!data.auditLog) {
-      defaults.auditLog = [];
-    }
-
-    if (Object.keys(defaults).length > 0) {
-      chrome.storage.local.set(defaults);
-    }
+if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onInstalled) {
+  chrome.runtime.onInstalled.addListener(() => {
+    setupContextMenus();
+    reconcileOrphanedTabs();
+    ensureStorageIntegrity(() => {
+      console.log("[OSN Guard] Service worker initialized and storage integrity verified.");
+    });
   });
-
-  console.log("[OSN Guard] Service worker initialized and defaults ensured.");
-});
+}
 
 // Rolling security audit log buffer limit
 const MAX_AUDIT_LOG_ENTRIES = 50;
@@ -202,135 +277,141 @@ function updateTabBadge(tabId, threats = []) {
 }
 
 // Handle extension messages
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Validate sender context and internal origin
-  if (sender && sender.id && chrome.runtime && chrome.runtime.id && sender.id !== chrome.runtime.id) {
-    return false;
-  }
-
-  if (!message || typeof message !== "object" || typeof message.action !== "string") {
-    return false;
-  }
-
-  const tabId = sender.tab ? sender.tab.id : null;
-
-  if (message.action === "reportThreats" && tabId) {
-    const { threats, statsUpdate } = message;
-    const tabKey = `tab_${tabId}`;
-    const tabRecord = {
-      url: sender.tab.url || "",
-      threats: Array.isArray(threats) ? threats : [],
-      updatedAt: Date.now()
-    };
-
-    // Store in session storage so it survives service worker dormancy
-    getSessionStorage().set({ [tabKey]: tabRecord }, () => {
-      updateTabBadge(tabId, tabRecord.threats);
-      if (statsUpdate) {
-        updateGlobalStats(statsUpdate);
-      }
-
-      // Record new threats in audit event buffer
-      if (Array.isArray(threats) && threats.length > 0) {
-        const pageUrl = sender.tab.url || "";
-        let host = "";
-        try {
-          host = new URL(pageUrl).hostname;
-        } catch {
-          host = pageUrl;
-        }
-        const timestamp = new Date().toISOString();
-        const logEntries = threats.map(t => ({
-          id: t.id || ("evt-" + Math.random().toString(36).slice(2, 10)),
-          timestamp: timestamp,
-          type: t.type || "Threat Detected",
-          severity: t.severity || "warning",
-          message: t.message || "",
-          target: t.target || "",
-          domain: host
-        }));
-        appendAuditLog(logEntries);
-      }
-
-      sendResponse({ status: "success" });
-    });
-
-    return true; // Keep message channel open for async response
-  }
-
-  else if (message.action === "getThreatsForTab") {
-    const requestTabId = Number.parseInt(message.tabId, 10);
-    if (!requestTabId || isNaN(requestTabId) || requestTabId <= 0) {
-      sendResponse({ url: "", threats: [] });
+if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Validate sender context and internal origin
+    if (sender && sender.id && chrome.runtime && chrome.runtime.id && sender.id !== chrome.runtime.id) {
       return false;
     }
 
-    const tabKey = `tab_${requestTabId}`;
-    getSessionStorage().get([tabKey], (result) => {
-      const data = result && result[tabKey] ? result[tabKey] : { url: "", threats: [] };
-      sendResponse(data);
-    });
-
-    return true;
-  }
-
-  else if (message.action === "checkUrlSafety") {
-    const { url } = message;
-    if (typeof url !== "string" || !url) {
-      sendResponse({ safe: true, reason: "Empty URL" });
+    if (!message || typeof message !== "object" || typeof message.action !== "string") {
       return false;
     }
 
-    chrome.storage.local.get("whitelistedDomains", (data) => {
-      const whitelist = data.whitelistedDomains || [];
-      const safetyResult = OSNUrlAnalyzer.analyzeUrlSafety(url, whitelist);
-      sendResponse(safetyResult);
-    });
+    const tabId = sender.tab ? sender.tab.id : null;
 
-    return true;
-  }
+    if (message.action === "reportThreats" && tabId) {
+      const { threats, statsUpdate } = message;
+      const tabKey = `tab_${tabId}`;
+      const tabRecord = {
+        url: sender.tab.url || "",
+        threats: Array.isArray(threats) ? threats : [],
+        updatedAt: Date.now()
+      };
 
-  else if (message.action === "incrementPiiBlocked") {
-    updateGlobalStats({ piiBlocked: 1 });
-    sendResponse({ status: "success" });
-    return true;
-  }
-
-  else if (message.action === "rescanTab") {
-    const targetTabId = Number.parseInt(message.tabId, 10);
-    if (targetTabId && !isNaN(targetTabId) && targetTabId > 0) {
-      chrome.tabs.sendMessage(targetTabId, { action: "triggerRescan" }, (res) => {
-        if (chrome.runtime.lastError) {
-          sendResponse({ status: "error", error: chrome.runtime.lastError.message });
-        } else {
-          sendResponse({ status: "success", result: res });
+      // Store in session storage so it survives service worker dormancy
+      getSessionStorage().set({ [tabKey]: tabRecord }, () => {
+        updateTabBadge(tabId, tabRecord.threats);
+        if (statsUpdate) {
+          updateGlobalStats(statsUpdate);
         }
+
+        // Record new threats in audit event buffer
+        if (Array.isArray(threats) && threats.length > 0) {
+          const pageUrl = sender.tab.url || "";
+          let host = "";
+          try {
+            host = new URL(pageUrl).hostname;
+          } catch {
+            host = pageUrl;
+          }
+          const timestamp = new Date().toISOString();
+          const logEntries = threats.map(t => ({
+            id: t.id || ("evt-" + Math.random().toString(36).slice(2, 10)),
+            timestamp: timestamp,
+            type: t.type || "Threat Detected",
+            severity: t.severity || "warning",
+            message: t.message || "",
+            target: t.target || "",
+            domain: host
+          }));
+          appendAuditLog(logEntries);
+        }
+
+        sendResponse({ status: "success" });
       });
+
+      return true; // Keep message channel open for async response
+    }
+
+    else if (message.action === "getThreatsForTab") {
+      const requestTabId = Number.parseInt(message.tabId, 10);
+      if (!requestTabId || isNaN(requestTabId) || requestTabId <= 0) {
+        sendResponse({ url: "", threats: [] });
+        return false;
+      }
+
+      const tabKey = `tab_${requestTabId}`;
+      getSessionStorage().get([tabKey], (result) => {
+        const data = result && result[tabKey] ? result[tabKey] : { url: "", threats: [] };
+        sendResponse(data);
+      });
+
       return true;
     }
-    sendResponse({ status: "error", error: "Invalid target tab ID" });
-    return false;
-  }
 
-  return false;
-});
+    else if (message.action === "checkUrlSafety") {
+      const { url } = message;
+      if (typeof url !== "string" || !url) {
+        sendResponse({ safe: true, reason: "Empty URL" });
+        return false;
+      }
+
+      chrome.storage.local.get("whitelistedDomains", (data) => {
+        const whitelist = data.whitelistedDomains || [];
+        const safetyResult = OSNUrlAnalyzer.analyzeUrlSafety(url, whitelist);
+        sendResponse(safetyResult);
+      });
+
+      return true;
+    }
+
+    else if (message.action === "incrementPiiBlocked") {
+      updateGlobalStats({ piiBlocked: 1 });
+      sendResponse({ status: "success" });
+      return true;
+    }
+
+    else if (message.action === "rescanTab") {
+      const targetTabId = Number.parseInt(message.tabId, 10);
+      if (targetTabId && !isNaN(targetTabId) && targetTabId > 0) {
+        chrome.tabs.sendMessage(targetTabId, { action: "triggerRescan" }, (res) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ status: "error", error: chrome.runtime.lastError.message });
+          } else {
+            sendResponse({ status: "success", result: res });
+          }
+        });
+        return true;
+      }
+      sendResponse({ status: "error", error: "Invalid target tab ID" });
+      return false;
+    }
+
+    return false;
+  });
+}
 
 // Clean up tab data when tab begins navigating to a new URL
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status === "loading") {
-    const tabKey = `tab_${tabId}`;
-    getSessionStorage().remove(tabKey);
-    if (chrome.action) {
-      chrome.action.setBadgeText({ text: "", tabId: tabId });
+if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.onUpdated) {
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === "loading") {
+      const tabKey = `tab_${tabId}`;
+      getSessionStorage().remove(tabKey);
+      if (chrome.action) {
+        chrome.action.setBadgeText({ text: "", tabId: tabId });
+      }
     }
-  }
-});
+  });
+}
 
 // Clean up tab data when tab is closed
-chrome.tabs.onRemoved.addListener((tabId) => {
-  const tabKey = `tab_${tabId}`;
-  getSessionStorage().remove(tabKey);
-});
+if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.onRemoved) {
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    const tabKey = `tab_${tabId}`;
+    getSessionStorage().remove(tabKey);
+  });
+}
 
 // Synchronize toolbar badge immediately upon active tab switch and reconcile dormant tabs
 if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.onActivated) {
@@ -442,6 +523,8 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     reconcileOrphanedTabs,
     throttledReconcileOrphanedTabs,
+    sanitizeAndRepairStorage,
+    ensureStorageIntegrity,
     appendAuditLog,
     updateGlobalStats,
     getSessionStorage

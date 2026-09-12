@@ -542,12 +542,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (sandboxOutput) {
         sandboxOutput.select();
         try {
-          document.execCommand("copy");
-          const orig = btn.textContent;
-          btn.textContent = "Copied!";
-          setTimeout(() => { btn.textContent = orig; }, 1500);
+          const successful = document.execCommand("copy");
+          if (successful) {
+            const orig = btn.textContent;
+            btn.textContent = "Copied!";
+            setTimeout(() => { btn.textContent = orig; }, 1500);
+          } else {
+            triggerErrorAlert("Clipboard copy unavailable in current context.");
+          }
         } catch {
-          // ignore
+          triggerErrorAlert("Failed to copy text to clipboard.");
         }
       }
     }

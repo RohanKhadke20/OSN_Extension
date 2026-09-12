@@ -25,9 +25,44 @@ function setupContextMenus() {
   });
 }
 
+// Clean up orphaned tab data when service worker starts or on install
+function reconcileOrphanedTabs() {
+  if (typeof chrome === "undefined" || !chrome.tabs || !chrome.tabs.query) return;
+
+  chrome.tabs.query({}, (activeTabs) => {
+    if (chrome.runtime.lastError || !Array.isArray(activeTabs)) return;
+    const activeTabIds = new Set(activeTabs.map(t => t.id));
+    const storage = getSessionStorage();
+
+    storage.get(null, (items) => {
+      if (!items || typeof items !== "object") return;
+      const keysToRemove = [];
+      for (const key of Object.keys(items)) {
+        if (key.startsWith("tab_")) {
+          const tabId = parseInt(key.slice(4), 10);
+          if (!activeTabIds.has(tabId)) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+      if (keysToRemove.length > 0) {
+        storage.remove(keysToRemove);
+      }
+    });
+  });
+}
+
+// Reconcile tabs on browser startup
+if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onStartup) {
+  chrome.runtime.onStartup.addListener(() => {
+    reconcileOrphanedTabs();
+  });
+}
+
 // Initialize default settings on install or update
 chrome.runtime.onInstalled.addListener(() => {
   setupContextMenus();
+  reconcileOrphanedTabs();
 
   chrome.storage.local.get(["shields", "stats", "whitelistedDomains", "customPiiPatterns"], (data) => {
     const defaults = {};
@@ -76,9 +111,30 @@ const MAX_AUDIT_LOG_ENTRIES = 50;
 function appendAuditLog(entries) {
   if (!Array.isArray(entries) || entries.length === 0) return;
 
+  const sanitizedEntries = entries.map(entry => {
+    if (!entry || typeof entry !== "object") return null;
+    const target = typeof entry.target === "string"
+      ? entry.target.trim().replace(/[\r\n\t]/g, " ").slice(0, 150)
+      : "";
+    const message = typeof entry.message === "string"
+      ? entry.message.trim().slice(0, 200)
+      : "";
+    return {
+      id: typeof entry.id === "string" ? entry.id : ("evt-" + Math.random().toString(36).slice(2, 10)),
+      timestamp: typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString(),
+      type: typeof entry.type === "string" ? entry.type.slice(0, 80) : "Threat Detected",
+      severity: (entry.severity === "critical" || entry.severity === "warning") ? entry.severity : "warning",
+      message: message,
+      target: target,
+      domain: typeof entry.domain === "string" ? entry.domain.slice(0, 100) : ""
+    };
+  }).filter(Boolean);
+
+  if (sanitizedEntries.length === 0) return;
+
   chrome.storage.local.get("auditLog", (data) => {
     const existingLog = Array.isArray(data.auditLog) ? data.auditLog : [];
-    const updated = [...entries, ...existingLog].slice(0, MAX_AUDIT_LOG_ENTRIES);
+    const updated = [...sanitizedEntries, ...existingLog].slice(0, MAX_AUDIT_LOG_ENTRIES);
     chrome.storage.local.set({ auditLog: updated });
   });
 }
@@ -127,6 +183,15 @@ function updateTabBadge(tabId, threats = []) {
 
 // Handle extension messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Validate sender context and internal origin
+  if (sender && sender.id && chrome.runtime && chrome.runtime.id && sender.id !== chrome.runtime.id) {
+    return false;
+  }
+
+  if (!message || typeof message !== "object" || typeof message.action !== "string") {
+    return false;
+  }
+
   const tabId = sender.tab ? sender.tab.id : null;
 
   if (message.action === "reportThreats" && tabId) {
@@ -174,8 +239,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   else if (message.action === "getThreatsForTab") {
-    const requestTabId = message.tabId;
-    if (!requestTabId) {
+    const requestTabId = Number.parseInt(message.tabId, 10);
+    if (!requestTabId || isNaN(requestTabId) || requestTabId <= 0) {
       sendResponse({ url: "", threats: [] });
       return false;
     }
@@ -191,6 +256,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   else if (message.action === "checkUrlSafety") {
     const { url } = message;
+    if (typeof url !== "string" || !url) {
+      sendResponse({ safe: true, reason: "Empty URL" });
+      return false;
+    }
 
     chrome.storage.local.get("whitelistedDomains", (data) => {
       const whitelist = data.whitelistedDomains || [];
@@ -208,8 +277,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   else if (message.action === "rescanTab") {
-    const targetTabId = message.tabId;
-    if (targetTabId) {
+    const targetTabId = Number.parseInt(message.tabId, 10);
+    if (targetTabId && !isNaN(targetTabId) && targetTabId > 0) {
       chrome.tabs.sendMessage(targetTabId, { action: "triggerRescan" }, (res) => {
         if (chrome.runtime.lastError) {
           sendResponse({ status: "error", error: chrome.runtime.lastError.message });
@@ -219,6 +288,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true;
     }
+    sendResponse({ status: "error", error: "Invalid target tab ID" });
+    return false;
   }
 
   return false;
@@ -298,17 +369,18 @@ if (typeof chrome !== "undefined" && chrome.contextMenus && chrome.contextMenus.
         });
       });
     } else if (info.menuItemId === "osn_scan_selection" && info.selectionText) {
+      const truncatedSelection = info.selectionText.slice(0, 5000);
       chrome.storage.local.get("customPiiPatterns", (data) => {
         const customPatterns = data.customPiiPatterns || [];
         let scamResult = { flagged: false };
         let piiResult = [];
 
         if (typeof OSNScamAnalyzer !== "undefined" && OSNScamAnalyzer.detectScamContent) {
-          scamResult = OSNScamAnalyzer.detectScamContent(info.selectionText);
+          scamResult = OSNScamAnalyzer.detectScamContent(truncatedSelection);
         }
 
         if (typeof OSNPiiAnalyzer !== "undefined" && OSNPiiAnalyzer.detectPii) {
-          piiResult = OSNPiiAnalyzer.detectPii(info.selectionText, customPatterns);
+          piiResult = OSNPiiAnalyzer.detectPii(truncatedSelection, customPatterns);
         }
 
         if (scamResult.flagged || piiResult.length > 0) {
@@ -322,7 +394,7 @@ if (typeof chrome !== "undefined" && chrome.contextMenus && chrome.contextMenus.
             type: `Manual Scan: ${type}`,
             severity: severity,
             message: scamResult.flagged ? scamResult.reason : `Detected ${piiResult.length} sensitive items`,
-            target: info.selectionText.slice(0, 60),
+            target: truncatedSelection.slice(0, 60),
             domain: host
           }]);
         }
@@ -330,7 +402,7 @@ if (typeof chrome !== "undefined" && chrome.contextMenus && chrome.contextMenus.
         chrome.tabs.sendMessage(tab.id, {
           action: "displayScanResult",
           targetType: "selection",
-          targetValue: info.selectionText,
+          targetValue: truncatedSelection,
           scamResult: scamResult,
           piiResult: piiResult
         }, () => {

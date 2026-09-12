@@ -337,4 +337,48 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
 
     page.close();
   });
+
+  it("detects and flags QR code elements encoding phishing destinations (Quishing)", async () => {
+    const testPageUrl = `http://127.0.0.1:${httpPort}/test-page.html`;
+    const page = await browser.openPage(testPageUrl);
+
+    // Inject QR image with decoded QR payload
+    await page.evaluate(`
+      (() => {
+        const img = document.createElement("img");
+        img.id = "quishing-test-qr";
+        img.width = 120;
+        img.height = 120;
+        img.setAttribute("data-osn-qr-payload", "http://malicious-crypto-drainer.xyz/login");
+        img.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        document.body.appendChild(img);
+      })()
+    `);
+
+    // Wait for content script to detect and mark the QR code image
+    await page.waitForFunction(() => {
+      const qrImg = document.getElementById("quishing-test-qr");
+      const hasWarning = qrImg && qrImg.classList.contains("osn-guard-quishing-warning");
+      const hasBadge = Boolean(document.querySelector(".osn-guard-quishing-badge-wrapper"));
+      return hasWarning || hasBadge;
+    }, 8000, 200);
+
+    const quishingStatus = await page.evaluate(`
+      (() => {
+        const qrImg = document.getElementById("quishing-test-qr");
+        return {
+          hasWarningClass: qrImg.classList.contains("osn-guard-quishing-warning"),
+          hasBadgedAttr: qrImg.hasAttribute("data-osn-badged"),
+          hasScannedAttr: qrImg.hasAttribute("data-osn-qr-scanned")
+        };
+      })()
+    `);
+
+    assert.equal(quishingStatus.hasWarningClass, true, "QR image should receive osn-guard-quishing-warning class");
+    assert.equal(quishingStatus.hasBadgedAttr, true, "QR image should be marked data-osn-badged");
+    assert.equal(quishingStatus.hasScannedAttr, true, "QR image should be marked data-osn-qr-scanned");
+
+    page.close();
+  });
 });
+

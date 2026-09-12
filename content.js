@@ -13,9 +13,21 @@
   const MAX_LINKS_PER_BATCH = 50;
   const MAX_PAGE_LINKS_LIMIT = 500;
   const MAX_PAGE_CONTAINERS_LIMIT = 200;
+  const MAX_PAGE_IMAGES_LIMIT = 50;
 
   let totalLinksScannedOnPage = 0;
   let totalContainersScannedOnPage = 0;
+  let totalImagesScannedOnPage = 0;
+  let qrBarcodeDetector = null;
+
+  if (typeof window !== "undefined" && "BarcodeDetector" in window) {
+    try {
+      qrBarcodeDetector = new window.BarcodeDetector({ formats: ["qr_code"] });
+    } catch {
+      qrBarcodeDetector = null;
+    }
+  }
+
   let domObserver = null;
   let scanTimeout = null;
 
@@ -346,9 +358,12 @@
     clearAllBadgesAndAlerts();
     document.querySelectorAll(`[${SCANNED_ATTR}]`).forEach(el => el.removeAttribute(SCANNED_ATTR));
     document.querySelectorAll("[data-osn-badged]").forEach(el => el.removeAttribute("data-osn-badged"));
+    document.querySelectorAll("[data-osn-qr-scanned]").forEach(el => el.removeAttribute("data-osn-qr-scanned"));
+    document.querySelectorAll(".osn-guard-quishing-warning").forEach(el => el.classList.remove("osn-guard-quishing-warning"));
     pageThreats = [];
     totalLinksScannedOnPage = 0;
     totalContainersScannedOnPage = 0;
+    totalImagesScannedOnPage = 0;
     isInitialReportDone = false;
     scanPage();
   }
@@ -660,6 +675,56 @@
         });
       }
 
+      // 4. VISUAL QUISHING (QR CODE PHISHING) SCAN (Batched within remaining frame budget)
+      if (shields.content && totalImagesScannedOnPage < MAX_PAGE_IMAGES_LIMIT && (performance.now() - batchStartTime < BATCH_TIME_BUDGET_MS)) {
+        const remainingImages = MAX_PAGE_IMAGES_LIMIT - totalImagesScannedOnPage;
+        const candidateImages = document.querySelectorAll("img:not([data-osn-qr-scanned]), canvas:not([data-osn-qr-scanned])");
+        const batchSize = Math.min(candidateImages.length, 10, remainingImages);
+        if (candidateImages.length > batchSize && totalImagesScannedOnPage + batchSize < MAX_PAGE_IMAGES_LIMIT) {
+          hasMoreWork = true;
+        }
+
+        for (let i = 0; i < batchSize; i++) {
+          if (performance.now() - batchStartTime > BATCH_TIME_BUDGET_MS) {
+            hasMoreWork = true;
+            break;
+          }
+
+          const img = candidateImages[i];
+          img.setAttribute("data-osn-qr-scanned", "true");
+          totalImagesScannedOnPage++;
+
+          // A. Direct QR payload attribute (e.g. from canvas/WASM/companion decoder or test harness)
+          const directPayload = img.getAttribute("data-osn-qr-payload");
+          if (directPayload) {
+            handleDecodedQrUrl(img, directPayload);
+            continue;
+          }
+
+          // B. Native BarcodeDetector (Chrome 88+)
+          if (!qrBarcodeDetector) continue;
+
+          const width = img.naturalWidth || img.width || 0;
+          const height = img.naturalHeight || img.height || 0;
+          if (width < 64 || height < 64) {
+            continue;
+          }
+
+          try {
+            qrBarcodeDetector.detect(img).then(barcodes => {
+              if (!barcodes || barcodes.length === 0) return;
+              for (let b = 0; b < barcodes.length; b++) {
+                handleDecodedQrUrl(img, barcodes[b].rawValue);
+              }
+            }).catch(() => {
+              // Ignore cross-origin image taint or invalid images
+            });
+          } catch {
+            // Ignore detector runtime errors
+          }
+        }
+      }
+
       // Phase B: Batch Apply DOM Modifications (Avoids interleaving layout reads/writes)
       for (let i = 0; i < pendingBadges.length; i++) {
         const item = pendingBadges[i];
@@ -780,6 +845,46 @@
       formElement.insertBefore(badgeWrapper, formElement.firstChild);
     } else {
       formElement.appendChild(badgeWrapper);
+    }
+  }
+
+  function addQuishingWarningBadge(imageElement, threat) {
+    if (!imageElement || !imageElement.parentNode || imageElement.hasAttribute("data-osn-badged")) return;
+    imageElement.setAttribute("data-osn-badged", "true");
+    imageElement.classList.add("osn-guard-quishing-warning");
+
+    const badgeWrapper = createBadge(threat, "content");
+    badgeWrapper.classList.add("osn-guard-quishing-badge-wrapper");
+
+    if (imageElement.nextSibling) {
+      imageElement.parentNode.insertBefore(badgeWrapper, imageElement.nextSibling);
+    } else {
+      imageElement.parentNode.appendChild(badgeWrapper);
+    }
+  }
+
+  function handleDecodedQrUrl(img, rawValue) {
+    let targetUrl = (rawValue || "").trim();
+    if (!targetUrl) return;
+
+    if (targetUrl.startsWith("www.")) {
+      targetUrl = "https://" + targetUrl;
+    }
+
+    if (typeof OSNUrlAnalyzer !== "undefined" && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://"))) {
+      const urlSafety = OSNUrlAnalyzer.analyzeUrlSafety(targetUrl, localWhitelisted);
+      if (!urlSafety.safe) {
+        const threat = {
+          id: "quishing-qr-" + Math.random().toString(36).substring(2, 11),
+          type: "Quishing (QR Phishing)",
+          severity: urlSafety.severity || "critical",
+          message: `Decoded QR code leads to untrusted destination: ${urlSafety.reason}`,
+          target: targetUrl
+        };
+
+        addQuishingWarningBadge(img, threat);
+        reportCurrentThreats([threat], { linksScanned: 0, threats: 1 });
+      }
     }
   }
 

@@ -337,3 +337,19 @@
     transform: translateX(0) scale(1);
   }
 }
+
+/* Quishing (QR Code Phishing) Visual Alerts */
+.osn-guard-quishing-warning {
+  outline: 3px solid #ef4444 !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.5) !important;
+  border-radius: 6px !important;
+  transition: outline 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.osn-guard-quishing-badge-wrapper {
+  margin-left: 8px !important;
+  vertical-align: middle !important;
+  display: inline-block !important;
+}
+

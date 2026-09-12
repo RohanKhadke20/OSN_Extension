@@ -26,3 +26,7 @@ yarn-error.log*
 # Test & Coverage artifacts
 coverage/
 .nyc_output/
+
+# Agent & CLI work directories
+.agents/
+.gemini/

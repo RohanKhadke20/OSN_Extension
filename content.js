@@ -8,8 +8,9 @@
   let isScannerInitialized = false;
 
   const SCANNED_ATTR = "data-osn-scanned";
-  const MAX_CONTAINERS_PER_BATCH = 50;
-  const MAX_LINKS_PER_BATCH = 100;
+  const BATCH_TIME_BUDGET_MS = 10;
+  const MAX_CONTAINERS_PER_BATCH = 30;
+  const MAX_LINKS_PER_BATCH = 50;
   let batchScheduleId = null;
   let isBatchRunning = false;
 
@@ -35,12 +36,12 @@
       batchScheduleId = requestIdleCallback(() => {
         batchScheduleId = null;
         scanPage();
-      }, { timeout: 500 });
+      }, { timeout: 150 });
     } else {
       batchScheduleId = setTimeout(() => {
         batchScheduleId = null;
         scanPage();
-      }, 80);
+      }, 20);
     }
   }
 
@@ -62,7 +63,7 @@
 
   function showSharedTooltip(badgeElement, threat) {
     const tooltip = getSharedTooltip();
-    tooltip.innerHTML = ""; // Safe as we construct DOM children
+    tooltip.replaceChildren();
 
     const header = document.createElement("div");
     header.className = `osn-guard-tooltip-header ${threat.severity}`;
@@ -354,9 +355,9 @@
     document.addEventListener("input", handleInputEvent, true);
     document.addEventListener("paste", handleInputEvent, true);
 
-    // Keep PII alert banners aligned on scroll and window resize
-    window.addEventListener("scroll", updateAllBannerPositions, { passive: true });
-    window.addEventListener("resize", updateAllBannerPositions, { passive: true });
+    // Keep PII alert banners aligned on scroll and window resize (debounced via requestAnimationFrame)
+    window.addEventListener("scroll", scheduleBannerUpdate, { passive: true });
+    window.addEventListener("resize", scheduleBannerUpdate, { passive: true });
 
     // Clean up timers on tab unload / navigation
     window.addEventListener("pagehide", cancelScheduledBatches, { passive: true });
@@ -373,7 +374,7 @@
     });
   }
 
-  // Main Page Scanning Logic
+  // Main Page Scanning Logic (Frame-budgeted to prevent tasks exceeding 16ms)
   function scanPage() {
     if (isCurrentSiteWhitelisted()) return;
     if (!shields.url && !shields.content && !shields.security) return;
@@ -383,6 +384,8 @@
     let localThreats = [];
     let linksScannedCount = 0;
     let newThreatsCount = 0;
+    const batchStartTime = performance.now();
+    const pendingBadges = [];
 
     try {
       // 1. LINK REPUTATION SCAN (Batched)
@@ -393,59 +396,73 @@
           hasMoreWork = true;
         }
 
-        batchLinks.forEach(link => {
+        for (let i = 0; i < batchLinks.length; i++) {
+          if (performance.now() - batchStartTime > BATCH_TIME_BUDGET_MS) {
+            hasMoreWork = true;
+            break;
+          }
+
+          const link = batchLinks[i];
           link.setAttribute(SCANNED_ATTR, "true");
 
           const href = link.href;
           if (!href || href.startsWith("javascript:") || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
-            return;
+            continue;
           }
 
           linksScannedCount++;
 
           // Fast synchronous check if analyzer is loaded
-          let result = null;
           if (typeof OSNUrlAnalyzer !== "undefined") {
-            result = OSNUrlAnalyzer.analyzeUrlSafety(href, localWhitelisted);
-            handleUrlResult(link, href, result);
+            const result = OSNUrlAnalyzer.analyzeUrlSafety(href, localWhitelisted);
+            if (result && !result.safe) {
+              newThreatsCount++;
+              const threat = {
+                id: "url-" + Math.random().toString(36).substring(2, 11),
+                type: "Phishing / Malicious Link",
+                severity: result.severity || "warning",
+                message: result.reason,
+                target: href
+              };
+              localThreats.push(threat);
+              pendingBadges.push({ type: "url", element: link, threat });
+            }
           } else {
             // Fallback to background worker
             chrome.runtime.sendMessage({ action: "checkUrlSafety", url: href }, (response) => {
-              if (chrome.runtime.lastError || !response) return;
-              handleUrlResult(link, href, response);
+              if (chrome.runtime.lastError || !response || response.safe) return;
+              const threat = {
+                id: "url-" + Math.random().toString(36).substring(2, 11),
+                type: "Phishing / Malicious Link",
+                severity: response.severity || "warning",
+                message: response.reason,
+                target: href
+              };
+              addUrlWarningBadge(link, threat);
+              reportCurrentThreats([threat], { linksScanned: 0, threats: 1 });
             });
           }
-        });
-      }
-
-      function handleUrlResult(link, href, response) {
-        if (response && !response.safe) {
-          newThreatsCount++;
-          const threat = {
-            id: "url-" + Math.random().toString(36).substring(2, 11),
-            type: "Phishing / Malicious Link",
-            severity: response.severity || "warning",
-            message: response.reason,
-            target: href
-          };
-          localThreats.push(threat);
-          addUrlWarningBadge(link, threat);
-          reportCurrentThreats([threat], { linksScanned: 0, threats: 1 });
         }
       }
 
-      // 2. SCAM & SPAM CONTENT DETECTION (Batched to MAX_CONTAINERS_PER_BATCH = 50)
-      if (shields.content) {
+      // 2. SCAM & SPAM CONTENT DETECTION (Batched within remaining frame budget)
+      if (shields.content && (performance.now() - batchStartTime < BATCH_TIME_BUDGET_MS)) {
         const containers = getSocialTextContainers();
         const batchContainers = containers.slice(0, MAX_CONTAINERS_PER_BATCH);
         if (containers.length > MAX_CONTAINERS_PER_BATCH) {
           hasMoreWork = true;
         }
 
-        batchContainers.forEach(container => {
+        for (let i = 0; i < batchContainers.length; i++) {
+          if (performance.now() - batchStartTime > BATCH_TIME_BUDGET_MS) {
+            hasMoreWork = true;
+            break;
+          }
+
+          const container = batchContainers[i];
           container.setAttribute(SCANNED_ATTR, "true");
           const text = container.textContent || "";
-          if (!text.trim()) return;
+          if (!text.trim()) continue;
 
           let scamScan = { flagged: false };
           if (typeof OSNScamAnalyzer !== "undefined") {
@@ -462,13 +479,15 @@
               target: text.trim().substring(0, 70) + (text.trim().length > 70 ? "..." : "")
             };
             localThreats.push(threat);
-            addContentWarningBadge(container, threat);
+            pendingBadges.push({ type: "content", element: container, threat });
           }
-        });
+        }
+      } else if (shields.content) {
+        hasMoreWork = true;
       }
 
-      // 3. INSECURE FORM SUBMISSION CHECKS
-      if (shields.security) {
+      // 3. INSECURE FORM SUBMISSION CHECKS (Batched within remaining frame budget)
+      if (shields.security && (performance.now() - batchStartTime < BATCH_TIME_BUDGET_MS)) {
         const forms = document.querySelectorAll(`form:not([${SCANNED_ATTR}])`);
         forms.forEach(form => {
           form.setAttribute(SCANNED_ATTR, "true");
@@ -486,7 +505,7 @@
               target: targetName
             };
             localThreats.push(threat);
-            addFormWarningBadge(form, threat);
+            pendingBadges.push({ type: "security", element: form, threat });
             return;
           }
 
@@ -502,7 +521,7 @@
               target: targetName
             };
             localThreats.push(threat);
-            addFormWarningBadge(form, threat);
+            pendingBadges.push({ type: "security", element: form, threat });
             return;
           }
 
@@ -521,7 +540,7 @@
                   target: targetName
                 };
                 localThreats.push(threat);
-                addFormWarningBadge(form, threat);
+                pendingBadges.push({ type: "security", element: form, threat });
                 return;
               }
             }
@@ -555,7 +574,7 @@
                     target: targetName
                   };
                   localThreats.push(threat);
-                  addFormWarningBadge(form, threat);
+                  pendingBadges.push({ type: "security", element: form, threat });
                 }
               }
             } catch {
@@ -565,7 +584,19 @@
         });
       }
 
-      // Initial or incremental report
+      // Phase B: Batch Apply DOM Modifications (Avoids interleaving layout reads/writes)
+      for (let i = 0; i < pendingBadges.length; i++) {
+        const item = pendingBadges[i];
+        if (item.type === "url") {
+          addUrlWarningBadge(item.element, item.threat);
+        } else if (item.type === "content") {
+          addContentWarningBadge(item.element, item.threat);
+        } else if (item.type === "security") {
+          addFormWarningBadge(item.element, item.threat);
+        }
+      }
+
+      // Initial or incremental report in single consolidated IPC call
       if (linksScannedCount > 0 || newThreatsCount > 0 || !isInitialReportDone) {
         isInitialReportDone = true;
         reportCurrentThreats(localThreats, {
@@ -606,7 +637,7 @@
   // Platform-Specific Selectors for Social Containers
   function getSocialTextContainers() {
     const hostname = window.location.hostname;
-    let selector = "p, .feed-text";
+    let selector = ".feed-text, p";
 
     if (hostname.includes("twitter.com") || hostname.includes("x.com")) {
       selector = '[data-testid="tweetText"], [data-testid="messageEntry"]';
@@ -641,18 +672,17 @@
     const unScanned = [];
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i];
-      if (!el.hasAttribute(SCANNED_ATTR) && !el.closest(".osn-guard-tooltip-wrapper")) {
+      const cls = typeof el.className === "string" ? el.className : "";
+      if (!el.hasAttribute(SCANNED_ATTR) && !cls.includes("osn-guard")) {
         unScanned.push(el);
       }
     }
     return unScanned;
   }
 
-  // Badge Insertion
+  // Badge Insertion (O(1) guard check without forced layout or subtree query)
   function addUrlWarningBadge(linkElement, threat) {
-    if (!linkElement || !linkElement.parentNode) return;
-    if (linkElement.hasAttribute("data-osn-badged")) return;
-    if (linkElement.nextElementSibling && linkElement.nextElementSibling.classList.contains("osn-guard-tooltip-wrapper")) return;
+    if (!linkElement || !linkElement.parentNode || linkElement.hasAttribute("data-osn-badged")) return;
 
     linkElement.setAttribute("data-osn-badged", "true");
     const badgeWrapper = createBadge(threat, "url");
@@ -660,14 +690,14 @@
   }
 
   function addContentWarningBadge(containerElement, threat) {
-    if (!containerElement || containerElement.hasAttribute("data-osn-badged") || containerElement.querySelector(".osn-guard-warning-badge")) return;
+    if (!containerElement || containerElement.hasAttribute("data-osn-badged")) return;
     containerElement.setAttribute("data-osn-badged", "true");
     const badgeWrapper = createBadge(threat, "content");
     containerElement.appendChild(badgeWrapper);
   }
 
   function addFormWarningBadge(formElement, threat) {
-    if (!formElement || formElement.hasAttribute("data-osn-badged") || formElement.querySelector(".osn-guard-warning-badge")) return;
+    if (!formElement || formElement.hasAttribute("data-osn-badged")) return;
     formElement.setAttribute("data-osn-badged", "true");
     const badgeWrapper = createBadge(threat, "security");
     if (formElement.firstChild) {
@@ -879,10 +909,52 @@
     banner.style.left = `${Math.round(Math.max(10, rect.left + scrollX))}px`;
   }
 
-  function updateAllBannerPositions() {
-    activeAlertBanners.forEach(({ banner }, element) => {
-      positionBanner(element, banner);
+  let bannerRafId = null;
+
+  function scheduleBannerUpdate() {
+    if (activeAlertBanners.size === 0 || bannerRafId !== null) return;
+    bannerRafId = requestAnimationFrame(() => {
+      bannerRafId = null;
+      updateAllBannerPositions();
     });
+  }
+
+  function updateAllBannerPositions() {
+    if (activeAlertBanners.size === 0) return;
+
+    // Phase 1: Batch all geometric reads
+    const updates = [];
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+
+    activeAlertBanners.forEach(({ banner }, element) => {
+      if (!document.body.contains(element)) {
+        banner.remove();
+        activeAlertBanners.delete(element);
+        return;
+      }
+      const rect = element.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) {
+        updates.push({ banner, display: "none" });
+        return;
+      }
+      let top = rect.top + scrollY - 36;
+      if (top < scrollY) {
+        top = rect.bottom + scrollY + 6;
+      }
+      const left = Math.round(Math.max(10, rect.left + scrollX));
+      updates.push({ banner, display: "flex", top: Math.round(top), left });
+    });
+
+    // Phase 2: Batch all style mutations
+    for (let i = 0; i < updates.length; i++) {
+      const u = updates[i];
+      u.banner.style.display = u.display;
+      if (u.display !== "none") {
+        u.banner.style.top = `${u.top}px`;
+        u.banner.style.left = `${u.left}px`;
+      }
+    }
   }
 
   function removePiiWarning(element) {

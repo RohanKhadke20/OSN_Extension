@@ -215,4 +215,148 @@ describe("Scam & Fraud Content Detector", () => {
       assert.equal(res.flagged, false);
     }
   });
+
+  // --- Expanded Heuristics: Fake Recovery Phrases & Modern Quishing Tests ---
+
+  it("detects fake recovery phrase with zero-width spaces (ZWSP \\u200B)", () => {
+    const text = "Enter your s\u200Be\u200Ce\u200Bd phrase to restore your wallet balance immediately.";
+    const res = detectScamContent(text);
+    assert.equal(res.flagged, true);
+    assert.equal(res.severity, "critical");
+    assert.equal(res.id, "seed-phrase-theft");
+    assert.equal(res.containsZeroWidth, true);
+    assert.equal(res.zeroWidthObfuscation, true);
+  });
+
+  it("detects secret recovery phrase with zero-width non-joiners (ZWNJ \\u200C) and joiners (ZWJ \\u200D)", () => {
+    const text = "Security Alert: Provide your secret r\u200Ceco\u200Dvery p\u200Bhrase to verify ownership.";
+    const res = detectScamContent(text);
+    assert.equal(res.flagged, true);
+    assert.equal(res.severity, "critical");
+    assert.equal(res.id, "seed-phrase-theft");
+    assert.equal(res.containsZeroWidth, true);
+    assert.equal(res.zeroWidthObfuscation, true);
+  });
+
+  it("detects 12-word and 24-word recovery phrase lures with directional markers (LRM/RLM)", () => {
+    const texts = [
+      "Backup required: Type your 12-word\u200E recovery\u200F phrase into our migration portal.",
+      "Enter your 24-word\u200B seed\u200C phrase to upgrade wallet security."
+    ];
+
+    for (const text of texts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected detection for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "seed-phrase-theft");
+      assert.equal(res.containsZeroWidth, true);
+    }
+  });
+
+  it("detects fake accidental or leaked recovery phrase honeypot drops", () => {
+    const drops = [
+      "I'm quitting Web3, here is my 12-word recovery phrase with 5.4 ETH inside, whoever claims it first gets it.",
+      "Found an accidental recovery phrase from an old paper wallet: claim it before someone else does.",
+      "Leaked recovery phrase from whale wallet: import immediately to claim balance."
+    ];
+
+    for (const text of drops) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected detection for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "seed-phrase-theft");
+    }
+  });
+
+  it("detects wallet import/restore lures with zero-width BOM (\\uFEFF) obfuscation", () => {
+    const texts = [
+      "Please import\uFEFF recovery\uFEFF phrase into the synchronized validator tool.",
+      "Restore wallet with seed\uFEFF phrase to unlock your tokens."
+    ];
+
+    for (const text of texts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected detection for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "seed-phrase-theft");
+      assert.equal(res.containsZeroWidth, true);
+      assert.equal(res.zeroWidthObfuscation, true);
+    }
+  });
+
+  it("detects modern Quishing 2FA and authenticator configuration lures", () => {
+    const quishingTexts = [
+      "Scan QR code to configure 2FA on your account before the mandatory security deadline.",
+      "Action Required: Scan QR code for two-factor authentication setup.",
+      "Scan QR code to register authenticator app to prevent account lockout."
+    ];
+
+    for (const text of quishingTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected quishing 2FA detection for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "quishing-lure");
+    }
+  });
+
+  it("detects modern Quishing phone camera and mobile device instructions", () => {
+    const cameraTexts = [
+      "Point camera at QR code to authenticate your workstation session.",
+      "Please scan QR code with your phone camera to continue login.",
+      "Scan QR code with mobile device to verify your identity."
+    ];
+
+    for (const text of cameraTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected quishing camera detection for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "quishing-lure");
+    }
+  });
+
+  it("detects modern Quishing mailbox and password expiration lures", () => {
+    const mailTexts = [
+      "Your mailbox has 6 quarantined messages. Scan QR code to release pending emails immediately.",
+      "Password expiring today. Scan QR code to retain password and maintain cloud access.",
+      "Scan QR code to review quarantined message and avoid message purge."
+    ];
+
+    for (const text of mailTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected quishing mailbox detection for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "quishing-lure");
+    }
+  });
+
+  it("detects modern Quishing HR, payroll, and benefits open enrollment lures", () => {
+    const hrTexts = [
+      "Internal HR Announcement: Scan QR code to view your payslip and confirm bonus payout.",
+      "Annual Benefits Update: Scan QR code to complete open enrollment before Friday.",
+      "Employee Payroll: Scan QR code to access W-2 wage statement."
+    ];
+
+    for (const text of hrTexts) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected quishing HR detection for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "quishing-lure");
+    }
+  });
+
+  it("detects modern Quishing instructions with zero-width character evasion", () => {
+    const obfuscatedQuishing = [
+      "S\u200Bcan Q\u200BR c\u200Bode to approve refund of $450 back to your card.",
+      "P\u200Coint camera at Q\u200DR c\u200Bode to authenticate."
+    ];
+
+    for (const text of obfuscatedQuishing) {
+      const res = detectScamContent(text);
+      assert.equal(res.flagged, true, `Expected obfuscated quishing detection for: ${text}`);
+      assert.equal(res.severity, "critical");
+      assert.equal(res.id, "quishing-lure");
+      assert.equal(res.containsZeroWidth, true);
+      assert.equal(res.zeroWidthObfuscation, true);
+    }
+  });
 });

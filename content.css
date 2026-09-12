@@ -1,8 +1,13 @@
 /* CSS styles injected into web pages by OSN Guard */
 
 /* Ensure complete box-sizing isolation for all OSN Guard components against host CSS resets */
-[class*="osn-guard-"],
-[class*="osn-guard-"] * {
+.osn-guard-warning-badge,
+.osn-guard-tooltip-wrapper,
+.osn-guard-floating-tooltip,
+.osn-guard-input-alert-banner,
+.osn-guard-toast-container,
+.osn-guard-toast,
+[class^="osn-guard-"] {
   box-sizing: border-box !important;
 }
 

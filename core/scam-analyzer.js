@@ -41,6 +41,52 @@
         "enter seed phrase",
         "enter secret recovery phrase",
         "secret recovery phrase",
+        "recovery phrase",
+        "seed phrase",
+        "12-word recovery phrase",
+        "24-word recovery phrase",
+        "12 word recovery phrase",
+        "24 word recovery phrase",
+        "12-word seed phrase",
+        "24-word seed phrase",
+        "12 word seed phrase",
+        "24 word seed phrase",
+        "backup recovery phrase",
+        "backup seed phrase",
+        "import recovery phrase",
+        "import your recovery phrase",
+        "import your seed phrase",
+        "enter your seed phrase",
+        "input recovery phrase",
+        "input seed phrase",
+        "input your recovery phrase",
+        "input your seed phrase",
+        "provide recovery phrase",
+        "provide your recovery phrase",
+        "share your recovery phrase",
+        "share your seed phrase",
+        "verify recovery phrase",
+        "verify your recovery phrase",
+        "restore wallet with recovery phrase",
+        "restore wallet with seed phrase",
+        "restore wallet with seed",
+        "mnemonic recovery phrase",
+        "mnemonic seed phrase",
+        "enter mnemonic phrase",
+        "enter your mnemonic",
+        "type your 12 words",
+        "type your 24 words",
+        "enter your 12 words",
+        "enter your 24 words",
+        "fake recovery phrase",
+        "leaked recovery phrase",
+        "accidental recovery phrase",
+        "wallet recovery phrase",
+        "here is my recovery phrase",
+        "here is my 12-word phrase",
+        "here is my 12 word phrase",
+        "here is my 12-word seed",
+        "here is my 12 word seed",
         "connect wallet to claim",
         "wallet verification required",
         "metamask verification",
@@ -48,7 +94,13 @@
         "sync wallet to resolve",
         "validate your private key"
       ],
-      reason: "Attempted cryptocurrency wallet drainer or private key theft."
+      patterns: [
+        /\b(?:enter|input|import|verify|restore|submit|provide|share|backup)\s+(?:your\s+)?(?:secret\s+)?(?:12|24)[\s-]*words?\b/i,
+        /\b(?:12|24)[\s-]*(?:word|mnemonic)[\s-]*(?:recovery|seed)[\s-]*phrase\b/i,
+        /\b(?:fake|leaked|accidental|abandoned|unclaimed)\s+(?:wallet\s+)?(?:seed|recovery|mnemonic)\s+phrase\b/i,
+        /\bhere\s+is\s+my\s+(?:12|24)[\s-]*(?:word\s+)?(?:seed|recovery)\b/i
+      ],
+      reason: "Attempted cryptocurrency wallet drainer, fake recovery phrase lure, or private key theft."
     },
     {
       id: "credential-phish",
@@ -124,7 +176,63 @@
         "scan qr to login",
         "scan the qr code to receive payment",
         "scan qr code to update payment",
-        "scan to unlock your account"
+        "scan to unlock your account",
+        // Modern Quishing Instructions - 2FA / MFA / Authenticator
+        "scan qr code to configure 2fa",
+        "scan qr code to set up 2fa",
+        "scan qr code to enable 2fa",
+        "scan qr code for two-factor authentication",
+        "scan qr code for 2fa",
+        "scan qr to update 2fa",
+        "scan qr code to register authenticator",
+        "scan qr code for authenticator app",
+        "scan qr for authenticator",
+        "scan qr to authenticate session",
+        // Modern Quishing Instructions - Phone Camera / Mobile Devices
+        "scan qr code with your phone camera",
+        "scan qr code with mobile camera",
+        "point camera at qr code",
+        "point your camera at the qr code",
+        "point phone camera at qr code",
+        "scan qr code with your smartphone",
+        "scan qr code with mobile device",
+        "scan qr with your mobile device",
+        "scan qr with phone to continue",
+        "scan this qr with your phone",
+        // Modern Quishing Instructions - Mailbox / Security / Password Expiration
+        "scan qr code to retain password",
+        "scan qr code to prevent password expiration",
+        "scan qr code to release pending emails",
+        "scan qr code to review quarantined message",
+        "scan qr code to review quarantined messages",
+        "scan qr code to unblock incoming emails",
+        "scan qr code to renew email access",
+        "scan qr to unlock mailbox",
+        "scan qr to keep current password",
+        // Modern Quishing Instructions - HR / Payroll / Employee Benefits
+        "scan qr code to view your payslip",
+        "scan qr code to view payslip",
+        "scan qr code to access w-2",
+        "scan qr code to review annual compensation",
+        "scan qr code to complete open enrollment",
+        "scan qr code to claim employee benefits",
+        "scan qr to review salary increase",
+        // Modern Quishing Instructions - Payment / Refund / Toll
+        "scan qr code to approve refund",
+        "scan qr code to confirm transaction",
+        "scan qr code to complete payment",
+        "scan qr code to pay unpaid toll",
+        "scan qr code to avoid parking citation",
+        // Modern Quishing Instructions - Web3 / Crypto
+        "scan qr code to connect wallet",
+        "scan qr code to claim airdrop",
+        "scan qr code to migrate tokens",
+        "scan qr to sign transaction"
+      ],
+      patterns: [
+        /\bscan\s+(?:the\s+|this\s+)?qr[\s-]*(?:code)?\s+(?:with\s+(?:your\s+)?(?:phone|mobile|smartphone)(?:\s+camera)?|to\s+(?:configure|enable|set\s+up|update)\s+2fa)\b/i,
+        /\b(?:point|aim)\s+(?:your\s+)?(?:phone\s+|mobile\s+)?camera\s+at\s+(?:the\s+|this\s+)?qr[\s-]*(?:code)?\b/i,
+        /\bscan\s+(?:the\s+|this\s+)?qr[\s-]*(?:code)?\s+to\s+(?:release\s+pending\s+emails|retain\s+password|prevent\s+password\s+expiration|view\s+(?:your\s+)?payslip|access\s+w-?2|approve\s+refund)\b/i
       ],
       reason: "Potential QR code phishing (Quishing) designed to bypass browser link inspection."
     },
@@ -266,33 +374,73 @@
     }
   ];
 
+  const ZERO_WIDTH_REGEX = /[\u200B-\u200D\u200E\u200F\uFEFF\u2060\u00AD\u202A-\u202E\u2066-\u2069]/g;
+
   /**
    * Analyzes text content for scam, fraud, or phishing indicators
-   * Prioritizes critical severity matches over warnings when multiple indicators exist
+   * Detects hidden zero-width character evasion and prioritizes critical severity matches
    * @param {string} text - The post or message content
-   * @returns {{ flagged: boolean, id?: string, category?: string, reason?: string, severity?: "warning" | "critical", matchedKeyword?: string, allMatches?: Array<object> }}
+   * @returns {{ flagged: boolean, id?: string, category?: string, reason?: string, severity?: "warning" | "critical", matchedKeyword?: string, containsZeroWidth?: boolean, zeroWidthObfuscation?: boolean, allMatches?: Array<object> }}
    */
   function detectScamContent(text) {
     if (!text || typeof text !== "string" || text.trim().length < 8) {
       return { flagged: false };
     }
 
-    const lower = text.toLowerCase();
+    const hasZeroWidth = ZERO_WIDTH_REGEX.test(text);
+    const sanitizedText = hasZeroWidth ? text.replace(ZERO_WIDTH_REGEX, "") : text;
+    const lowerRaw = text.toLowerCase();
+    const lowerSanitized = hasZeroWidth ? sanitizedText.toLowerCase() : lowerRaw;
     const matches = [];
 
     for (const rule of SCAM_RULES) {
-      for (const keyword of rule.keywords) {
-        if (lower.includes(keyword)) {
-          matches.push({
-            flagged: true,
-            id: rule.id,
-            category: rule.category,
-            reason: rule.reason,
-            severity: rule.severity,
-            matchedKeyword: keyword
-          });
-          break; // Match at most once per rule category
+      let matched = false;
+      let matchedTerm = null;
+      let matchedViaSanitization = false;
+
+      // 1. Keyword check (raw and zero-width stripped)
+      if (rule.keywords) {
+        for (const keyword of rule.keywords) {
+          if (lowerRaw.includes(keyword)) {
+            matched = true;
+            matchedTerm = keyword;
+            break;
+          } else if (hasZeroWidth && lowerSanitized.includes(keyword)) {
+            matched = true;
+            matchedTerm = keyword;
+            matchedViaSanitization = true;
+            break;
+          }
         }
+      }
+
+      // 2. Pattern check (raw and zero-width stripped)
+      if (!matched && rule.patterns) {
+        for (const pattern of rule.patterns) {
+          if (pattern.test(lowerRaw)) {
+            matched = true;
+            matchedTerm = pattern.source;
+            break;
+          } else if (hasZeroWidth && pattern.test(lowerSanitized)) {
+            matched = true;
+            matchedTerm = pattern.source;
+            matchedViaSanitization = true;
+            break;
+          }
+        }
+      }
+
+      if (matched) {
+        matches.push({
+          flagged: true,
+          id: rule.id,
+          category: rule.category,
+          reason: rule.reason,
+          severity: rule.severity,
+          matchedKeyword: matchedTerm,
+          containsZeroWidth: hasZeroWidth,
+          zeroWidthObfuscation: matchedViaSanitization
+        });
       }
     }
 
@@ -304,12 +452,15 @@
     const topThreat = matches.find(m => m.severity === "critical") || matches[0];
     return {
       ...topThreat,
+      containsZeroWidth: hasZeroWidth,
+      zeroWidthObfuscation: matches.some(m => m.zeroWidthObfuscation),
       allMatches: matches
     };
   }
 
   return {
     detectScamContent,
-    SCAM_RULES
+    SCAM_RULES,
+    ZERO_WIDTH_REGEX
   };
 });

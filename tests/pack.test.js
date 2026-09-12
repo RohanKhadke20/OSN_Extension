@@ -5,6 +5,7 @@ const path = require("node:path");
 const zlib = require("node:zlib");
 const {
   packExtension,
+  buildTargetManifest,
   buildZipBuffer,
   collectProductionFiles,
   toDosTime,
@@ -114,6 +115,69 @@ describe("Distribution Packager (scripts/pack.js)", () => {
 
       // Clean up test artifact
       fs.unlinkSync(result.zipPath);
+      if (fs.existsSync(result.manifestPath)) fs.unlinkSync(result.manifestPath);
+      fs.rmdirSync(testDistDir);
+    });
+
+    it("transforms manifests correctly for Chrome, Firefox, and Safari targets", () => {
+      const baseManifest = {
+        manifest_version: 3,
+        name: "OSN Guard - Test",
+        version: "1.3.0",
+        background: { service_worker: "background.js" }
+      };
+
+      // Chrome target retains service_worker
+      const chromeManifest = buildTargetManifest(baseManifest, "chrome");
+      assert.equal(chromeManifest.background.service_worker, "background.js");
+      assert.equal(chromeManifest.browser_specific_settings, undefined);
+
+      // Firefox target converts to event page scripts array with load order
+      const firefoxManifest = buildTargetManifest(baseManifest, "firefox");
+      assert.equal(firefoxManifest.background.service_worker, undefined);
+      assert.deepEqual(firefoxManifest.background.scripts, [
+        "core/url-analyzer.js",
+        "core/pii-analyzer.js",
+        "core/scam-analyzer.js",
+        "background.js"
+      ]);
+      assert.notEqual(firefoxManifest.browser_specific_settings?.gecko?.id, undefined);
+      assert.equal(firefoxManifest.browser_specific_settings.gecko.strict_min_version, "109.0");
+
+      // Safari target retains service_worker and adds safari settings
+      const safariManifest = buildTargetManifest(baseManifest, "safari");
+      assert.equal(safariManifest.background.service_worker, "background.js");
+      assert.equal(safariManifest.browser_specific_settings.safari.strict_min_version, "15.4");
+    });
+
+    it("builds target-specific packages and exports manifest files", () => {
+      const targets = ["chrome", "firefox", "safari"];
+
+      for (const target of targets) {
+        const result = packExtension({
+          rootDir,
+          outputDir: testDistDir,
+          target
+        });
+
+        assert.equal(result.target, target);
+        assert.ok(fs.existsSync(result.zipPath));
+        assert.ok(fs.existsSync(result.manifestPath));
+
+        // Read the target manifest JSON written out
+        const writtenManifest = JSON.parse(fs.readFileSync(result.manifestPath, "utf8"));
+        if (target === "firefox") {
+          assert.ok(Array.isArray(writtenManifest.background.scripts));
+          assert.equal(writtenManifest.browser_specific_settings.gecko.id, "osn-guard@extension.local");
+        } else if (target === "safari") {
+          assert.equal(writtenManifest.browser_specific_settings.safari.strict_min_version, "15.4");
+        }
+
+        // Clean up
+        fs.unlinkSync(result.zipPath);
+        fs.unlinkSync(result.manifestPath);
+      }
+
       fs.rmdirSync(testDistDir);
     });
   });

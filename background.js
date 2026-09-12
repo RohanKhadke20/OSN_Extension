@@ -1,5 +1,13 @@
 // Background service worker for OSN Guard (Manifest V3)
-importScripts("core/url-analyzer.js", "core/pii-analyzer.js", "core/scam-analyzer.js");
+// Cross-browser namespace normalization (Chromium chrome.* / Firefox browser.*)
+if (typeof globalThis.chrome === "undefined" && typeof globalThis.browser !== "undefined") {
+  globalThis.chrome = globalThis.browser;
+}
+
+// In Service Workers, dynamically import dependencies; in Firefox event pages, dependencies load via manifest scripts array
+if (typeof importScripts === "function") {
+  importScripts("core/url-analyzer.js", "core/pii-analyzer.js", "core/scam-analyzer.js");
+}
 
 // Storage adapter prioritizing session storage for ephemeral tab state
 const getSessionStorage = () => {

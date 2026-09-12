@@ -210,16 +210,57 @@ function collectProductionFiles(rootDir, includes = INCLUDED_PATTERNS, excludes 
 }
 
 /**
+ * Generates browser-targeted manifest payload based on target engine.
+ * @param {Object} baseManifest - Base Chromium MV3 manifest
+ * @param {'chrome' | 'firefox' | 'safari'} target - Target browser engine
+ * @returns {Object} Target-adjusted manifest object
+ */
+function buildTargetManifest(baseManifest, target = "chrome") {
+  const manifest = JSON.parse(JSON.stringify(baseManifest));
+
+  if (target === "firefox") {
+    // 1. Convert service_worker to event page scripts array with strict dependency load order
+    manifest.background = {
+      scripts: [
+        "core/url-analyzer.js",
+        "core/pii-analyzer.js",
+        "core/scam-analyzer.js",
+        "background.js"
+      ]
+    };
+
+    // 2. Add mandatory Gecko ID for Firefox AMO & persistent storage
+    manifest.browser_specific_settings = {
+      gecko: {
+        id: "osn-guard@extension.local",
+        strict_min_version: "109.0"
+      }
+    };
+  } else if (target === "safari") {
+    // Safari uses service worker with Safari-specific settings
+    manifest.browser_specific_settings = {
+      safari: {
+        strict_min_version: "15.4"
+      }
+    };
+  }
+
+  return manifest;
+}
+
+/**
  * Packages the extension into a distribution ZIP archive.
  * @param {Object} options
  * @param {string} [options.rootDir] - Extension root directory
  * @param {string} [options.outputDir] - Destination folder for zip
  * @param {string} [options.zipFileName] - Optional explicit filename
- * @returns {{ zipPath: string, totalFiles: number, uncompressedBytes: number, compressedBytes: number, files: string[] }}
+ * @param {'chrome' | 'firefox' | 'safari'} [options.target='chrome'] - Target browser engine
+ * @returns {{ target: string, zipPath: string, manifestPath: string, manifest: Object, totalFiles: number, uncompressedBytes: number, compressedBytes: number, files: string[] }}
  */
 function packExtension(options = {}) {
   const rootDir = options.rootDir || path.resolve(__dirname, "..");
   const outputDir = options.outputDir || path.join(rootDir, "dist");
+  const target = options.target || "chrome";
 
   // Read manifest for extension identity & version
   const manifestPath = path.join(rootDir, "manifest.json");
@@ -227,16 +268,25 @@ function packExtension(options = {}) {
     throw new Error(`manifest.json not found in root directory: ${rootDir}`);
   }
 
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  const extensionName = (manifest.name || "osn-guard").toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-");
-  const extensionVersion = manifest.version || "1.0.0";
-  const defaultZipName = `${extensionName}-v${extensionVersion}.zip`;
-  const zipFileName = options.zipFileName || defaultZipName;
+  const baseManifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const targetManifest = buildTargetManifest(baseManifest, target);
 
   // Ensure output directory exists
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
+
+  // Write target manifest file to outputDir for direct inspection
+  const targetManifestName = `manifest-${target}.json`;
+  const targetManifestPath = path.join(outputDir, targetManifestName);
+  fs.writeFileSync(targetManifestPath, JSON.stringify(targetManifest, null, 2) + "\n", "utf8");
+
+  const extensionName = (targetManifest.name || "osn-guard").toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-");
+  const extensionVersion = targetManifest.version || "1.0.0";
+  const defaultZipName = target === "chrome"
+    ? `${extensionName}-v${extensionVersion}.zip`
+    : `${extensionName}-${target}-v${extensionVersion}.zip`;
+  const zipFileName = options.zipFileName || defaultZipName;
 
   // Collect files
   const fileEntries = collectProductionFiles(rootDir);
@@ -244,46 +294,72 @@ function packExtension(options = {}) {
     throw new Error("No production files found to package.");
   }
 
-  // Load buffer for each file
-  const zipInput = fileEntries.map(entry => ({
-    name: entry.relativePath,
-    data: fs.readFileSync(entry.fullPath),
-    mtime: entry.mtime
-  }));
+  const targetManifestBuf = Buffer.from(JSON.stringify(targetManifest, null, 2) + "\n", "utf8");
+
+  // Load buffer for each file, substituting the target manifest into the archive
+  const zipInput = fileEntries.map(entry => {
+    if (entry.relativePath === "manifest.json") {
+      return {
+        name: "manifest.json",
+        data: targetManifestBuf,
+        mtime: new Date()
+      };
+    }
+    return {
+      name: entry.relativePath,
+      data: fs.readFileSync(entry.fullPath),
+      mtime: entry.mtime
+    };
+  });
 
   const zipBuffer = buildZipBuffer(zipInput);
   const zipPath = path.join(outputDir, zipFileName);
   fs.writeFileSync(zipPath, zipBuffer);
 
-  const totalUncompressed = fileEntries.reduce((acc, f) => acc + f.size, 0);
+  const totalUncompressed = zipInput.reduce((acc, f) => acc + f.data.length, 0);
 
   return {
+    target,
     zipPath,
-    totalFiles: fileEntries.length,
+    manifestPath: targetManifestPath,
+    manifest: targetManifest,
+    totalFiles: zipInput.length,
     uncompressedBytes: totalUncompressed,
     compressedBytes: zipBuffer.length,
-    files: fileEntries.map(f => f.relativePath)
+    files: zipInput.map(f => f.name)
   };
 }
 
 // CLI Execution Handler
 if (require.main === module) {
   try {
+    const args = process.argv.slice(2);
+    let targetArg = "chrome";
+    for (const arg of args) {
+      if (arg.startsWith("--target=")) {
+        targetArg = arg.split("=")[1].toLowerCase();
+      }
+    }
+
+    const targets = targetArg === "all" ? ["chrome", "firefox", "safari"] : [targetArg];
+
     console.log("==================================================");
-    console.log(" OSN Guard - Production Extension Packager");
+    console.log(" OSN Guard - Multi-Browser Extension Packager");
+    console.log(` Target Browser(s): ${targets.join(", ")}`);
     console.log("==================================================");
 
-    const result = packExtension();
+    for (const target of targets) {
+      const result = packExtension({ target });
+      const savings = ((1 - result.compressedBytes / result.uncompressedBytes) * 100).toFixed(1);
+      console.log(`\n[${target.toUpperCase()}] Package Generated:`);
+      console.log(`  Target Manifest: ${result.manifestPath}`);
+      console.log(`  Archive Output:  ${result.zipPath}`);
+      console.log(`  Raw Size:        ${(result.uncompressedBytes / 1024).toFixed(2)} KB`);
+      console.log(`  Archive Size:    ${(result.compressedBytes / 1024).toFixed(2)} KB (${savings}% compression)`);
+      console.log(`  Files:           ${result.totalFiles}`);
+    }
 
-    console.log(`\nPackaged ${result.totalFiles} production files:`);
-    result.files.forEach(f => console.log(`  + ${f}`));
-
-    const savings = ((1 - result.compressedBytes / result.uncompressedBytes) * 100).toFixed(1);
-    console.log("\nDistribution Archive Created:");
-    console.log(`  Output:       ${result.zipPath}`);
-    console.log(`  Raw Size:     ${(result.uncompressedBytes / 1024).toFixed(2)} KB`);
-    console.log(`  Archive Size: ${(result.compressedBytes / 1024).toFixed(2)} KB (${savings}% compression)`);
-    console.log("\nSuccess: Ready for Chrome Web Store upload.\n");
+    console.log("\nSuccess: Ready for Web Store, AMO, and Safari distribution.\n");
   } catch (err) {
     console.error("\nPackaging Failed:", err.message);
     process.exit(1);
@@ -292,6 +368,7 @@ if (require.main === module) {
 
 module.exports = {
   packExtension,
+  buildTargetManifest,
   buildZipBuffer,
   collectProductionFiles,
   toDosTime,

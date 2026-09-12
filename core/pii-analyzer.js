@@ -194,9 +194,44 @@
   const customRegexCache = new Map();
 
   /**
+   * Validates whether a user-defined regular expression pattern is safe against
+   * catastrophic backtracking (Regular Expression Denial-of-Service / ReDoS) and valid syntactically.
+   * @param {string} pattern
+   * @returns {boolean}
+   */
+  function isSafeRegexPattern(pattern) {
+    if (!pattern || typeof pattern !== "string") return false;
+    const trimmed = pattern.trim();
+    if (trimmed.length === 0 || trimmed.length > 250) return false;
+
+    // 1. Check syntax validity
+    try {
+      new RegExp(trimmed);
+    } catch {
+      return false;
+    }
+
+    // 2. Strip escaped characters (e.g. \+, \*, \\) to prevent false positives on escaped literals
+    const stripped = trimmed.replace(/\\./g, "");
+
+    // 3. Detect nested quantifiers causing exponential backtracking: e.g. (a+)+, (.*)*, (foo|bar+)+, (a+){2,}
+    const nestedQuantifierRegex = /\([^()]*[+*]\)[+*]|\([^()]*[+*]\)\{[0-9]+,?\d*\}|\([^()]*\{[0-9]+,?\d*\}\)[+*]/;
+    if (nestedQuantifierRegex.test(stripped)) {
+      return false;
+    }
+
+    // 4. Detect deeply nested quantified groups: ((a)+)+
+    if (/\((?:[^()]*\([^()]*\)[^()]*)+[+*]\)[+*]/.test(stripped)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * Retrieves or compiles a cached global RegExp instance.
    * Resets lastIndex = 0 before returning.
-   * Caches null on compilation error to avoid redundant syntax parsing and console noise.
+   * Caches null on compilation error or ReDoS risk to avoid redundant parsing and CPU stalls.
    * @param {string} pattern
    * @returns {RegExp | null}
    */
@@ -209,6 +244,18 @@
         cached.lastIndex = 0;
       }
       return cached;
+    }
+
+    if (!isSafeRegexPattern(pattern)) {
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn(`[OSN Guard] Invalid or unsafe custom regex "${pattern}"`);
+      }
+      if (customRegexCache.size >= MAX_CUSTOM_REGEX_CACHE_SIZE) {
+        const oldestKey = customRegexCache.keys().next().value;
+        customRegexCache.delete(oldestKey);
+      }
+      customRegexCache.set(pattern, null);
+      return null;
     }
 
     try {
@@ -367,6 +414,7 @@
     BUILTIN_PATTERNS,
     getCompiledCustomRegex,
     clearCustomRegexCache,
-    getCustomRegexCacheSize
+    getCustomRegexCacheSize,
+    isSafeRegexPattern
   };
 });

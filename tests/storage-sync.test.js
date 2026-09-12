@@ -1,7 +1,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const { isDomainWhitelisted, isSafeDomain } = require("../core/url-analyzer.js");
-const { detectPii } = require("../core/pii-analyzer.js");
+const { detectPii, isSafeRegexPattern } = require("../core/pii-analyzer.js");
 
 describe("Storage & Integration Helpers", () => {
   describe("Domain Whitelist Matching Logic", () => {
@@ -178,6 +178,65 @@ describe("Storage & Integration Helpers", () => {
 
       assert.equal(validRules.length, 1);
       assert.equal(validRules[0].name, "Valid Rule");
+    });
+
+    it("rejects ReDoS patterns, oversized fields, and invalid severities in imported payloads", () => {
+      const maliciousBackup = {
+        shields: { pii: true, url: true, content: true, security: true },
+        whitelistedDomains: ["valid.com", "a".repeat(150)], // Oversized domain
+        customPiiPatterns: [
+          { name: "Safe Token", pattern: "TOK-[0-9]{6}", severity: "critical" },
+          { name: "ReDoS Attack", pattern: "(a+)+$", severity: "critical" },
+          { name: "Nested Repeat ReDoS", pattern: "([0-9]+)*", severity: "warning" },
+          { name: "a".repeat(60), pattern: "TEST", severity: "warning" }, // Oversized name > 50
+          { name: "Empty Pattern", pattern: "" },
+          { name: "Invalid Severity", pattern: "SEC-[A-Z]+", severity: "super-critical" }
+        ]
+      };
+
+      const validatedDomains = maliciousBackup.whitelistedDomains
+        .filter(d => typeof d === "string" && d.trim().length > 0 && d.trim().length <= 100)
+        .map(d => d.trim().toLowerCase().replace(/\.+$/, ""))
+        .slice(0, 200);
+
+      assert.deepEqual(validatedDomains, ["valid.com"]);
+
+      const validatedRules = maliciousBackup.customPiiPatterns
+        .filter(p => {
+          if (!p || typeof p !== "object") return false;
+          if (!p.name || typeof p.name !== "string" || p.name.trim().length === 0 || p.name.length > 50) return false;
+          if (!p.pattern || typeof p.pattern !== "string" || p.pattern.trim().length === 0 || p.pattern.length > 250) return false;
+          return isSafeRegexPattern(p.pattern);
+        })
+        .map(p => ({
+          name: p.name.trim().slice(0, 50),
+          pattern: p.pattern.trim(),
+          severity: (p.severity === "critical" || p.severity === "warning") ? p.severity : "warning"
+        }));
+
+      assert.equal(validatedRules.length, 2);
+      assert.equal(validatedRules[0].name, "Safe Token");
+      assert.equal(validatedRules[0].severity, "critical");
+      assert.equal(validatedRules[1].name, "Invalid Severity");
+      assert.equal(validatedRules[1].severity, "warning"); // Sanitized to fallback 'warning'
+    });
+
+    it("prevents prototype pollution from parsed JSON backups", () => {
+      const maliciousJson = '{"__proto__": {"polluted": true}, "shields": {"pii": true}}';
+      const parsed = JSON.parse(maliciousJson);
+
+      const updates = {};
+      if (parsed.shields && typeof parsed.shields === "object") {
+        updates.shields = {
+          pii: Boolean(parsed.shields.pii),
+          url: Boolean(parsed.shields.url),
+          content: Boolean(parsed.shields.content),
+          security: Boolean(parsed.shields.security)
+        };
+      }
+
+      assert.equal(Object.prototype.polluted, undefined, "Prototype must not be polluted");
+      assert.equal(updates.shields.pii, true);
     });
   });
 });

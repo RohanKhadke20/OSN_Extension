@@ -182,24 +182,41 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    if (name.length > 50) {
+      triggerErrorAlert("Rule name must not exceed 50 characters.");
+      return;
+    }
+
     // Strip wrapping slashes if user pasted a regex literal e.g. /^[0-9]+$/
     if (pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
       pattern = pattern.substring(1, pattern.lastIndexOf("/"));
     }
 
-    // Verify valid Regular Expression syntax
-    try {
-      new RegExp(pattern);
-    } catch {
-      triggerErrorAlert("Invalid Regular Expression syntax. Please check your pattern.");
+    if (pattern.length > 250) {
+      triggerErrorAlert("Regex pattern must not exceed 250 characters.");
       return;
+    }
+
+    // Verify valid Regular Expression syntax and ReDoS safety
+    if (typeof OSNPiiAnalyzer !== "undefined" && OSNPiiAnalyzer.isSafeRegexPattern) {
+      if (!OSNPiiAnalyzer.isSafeRegexPattern(pattern)) {
+        triggerErrorAlert("Pattern rejected: Vulnerable to catastrophic backtracking (ReDoS) or invalid syntax.");
+        return;
+      }
+    } else {
+      try {
+        new RegExp(pattern);
+      } catch {
+        triggerErrorAlert("Invalid Regular Expression syntax. Please check your pattern.");
+        return;
+      }
     }
 
     const newRule = {
       id: "rule_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
       name,
       pattern,
-      severity
+      severity: (severity === "critical" || severity === "warning") ? severity : "warning"
     };
 
     localPiiRules.push(newRule);
@@ -354,29 +371,45 @@ document.addEventListener("DOMContentLoaded", () => {
 
           if (parsed.shields && typeof parsed.shields === "object") {
             updates.shields = {
-              pii: parsed.shields.pii !== false,
-              url: parsed.shields.url !== false,
-              content: parsed.shields.content !== false,
-              security: parsed.shields.security !== false
+              pii: Boolean(parsed.shields.pii),
+              url: Boolean(parsed.shields.url),
+              content: Boolean(parsed.shields.content),
+              security: Boolean(parsed.shields.security)
             };
           }
 
           if (Array.isArray(parsed.whitelistedDomains)) {
             updates.whitelistedDomains = parsed.whitelistedDomains
-              .filter(d => typeof d === "string" && d.trim().length > 0)
-              .map(d => d.trim().toLowerCase().replace(/\.+$/, ""));
+              .filter(d => typeof d === "string" && d.trim().length > 0 && d.trim().length <= 100)
+              .map(d => d.trim().toLowerCase().replace(/\.+$/, ""))
+              .slice(0, 200);
           }
 
           if (Array.isArray(parsed.customPiiPatterns)) {
-            updates.customPiiPatterns = parsed.customPiiPatterns.filter(p => {
-              if (!p || !p.pattern || typeof p.pattern !== "string") return false;
-              try {
-                new RegExp(p.pattern, "g");
-                return true;
-              } catch {
-                return false;
-              }
-            });
+            updates.customPiiPatterns = parsed.customPiiPatterns
+              .filter(p => {
+                if (!p || typeof p !== "object") return false;
+                if (!p.name || typeof p.name !== "string" || p.name.trim().length === 0 || p.name.length > 50) return false;
+                if (!p.pattern || typeof p.pattern !== "string" || p.pattern.trim().length === 0 || p.pattern.length > 250) return false;
+                if (typeof OSNPiiAnalyzer !== "undefined" && OSNPiiAnalyzer.isSafeRegexPattern) {
+                  return OSNPiiAnalyzer.isSafeRegexPattern(p.pattern);
+                }
+                try {
+                  new RegExp(p.pattern, "g");
+                  return true;
+                } catch {
+                  return false;
+                }
+              })
+              .map(p => ({
+                id: (typeof p.id === "string" && /^rule_[a-zA-Z0-9_-]+$/.test(p.id))
+                  ? p.id
+                  : "rule_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+                name: p.name.trim().slice(0, 50),
+                pattern: p.pattern.trim(),
+                severity: (p.severity === "critical" || p.severity === "warning") ? p.severity : "warning"
+              }))
+              .slice(0, 50);
           }
 
           if (Object.keys(updates).length === 0) {

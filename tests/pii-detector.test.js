@@ -8,7 +8,8 @@ const {
   isValidIBAN,
   getCompiledCustomRegex,
   clearCustomRegexCache,
-  getCustomRegexCacheSize
+  getCustomRegexCacheSize,
+  isSafeRegexPattern
 } = require("../core/pii-analyzer.js");
 
 describe("PII Leak Detector", () => {
@@ -291,6 +292,52 @@ describe("PII Leak Detector", () => {
       assert.equal(res1[0].match, "ORD-12345");
       assert.equal(res2.length, 2);
       assert.equal(getCustomRegexCacheSize(), 1);
+    });
+  });
+
+  describe("ReDoS & Regular Expression Safety Validation", () => {
+    it("permits standard, benign custom regex patterns", () => {
+      const validPatterns = [
+        "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$",
+        "ORD-[0-9]{5,8}",
+        "(?:\\+1[-.\\s]?)?\\d{10}",
+        "AKIA[0-9A-Z]{16}",
+        "[A-Za-z0-9_-]{10,40}",
+        "ghp_[a-zA-Z0-9]{36}"
+      ];
+
+      for (const pat of validPatterns) {
+        assert.equal(isSafeRegexPattern(pat), true, `Expected valid: ${pat}`);
+        const compiled = getCompiledCustomRegex(pat);
+        assert.notEqual(compiled, null, `Expected compilable: ${pat}`);
+      }
+    });
+
+    it("rejects catastrophic backtracking (ReDoS) nested quantifiers", () => {
+      const redosPatterns = [
+        "(a+)+",
+        "(a*)*",
+        "([0-9]+)*",
+        "(foo|bar+)+",
+        "(a+){2,}",
+        "((x)+)+",
+        "([a-zA-Z]+)*"
+      ];
+
+      for (const pat of redosPatterns) {
+        assert.equal(isSafeRegexPattern(pat), false, `Expected ReDoS rejection for: ${pat}`);
+        const compiled = getCompiledCustomRegex(pat);
+        assert.equal(compiled, null, `Expected getCompiledCustomRegex to return null for ReDoS: ${pat}`);
+      }
+    });
+
+    it("rejects invalid syntax, empty strings, and oversized patterns", () => {
+      assert.equal(isSafeRegexPattern(""), false);
+      assert.equal(isSafeRegexPattern(null), false);
+      assert.equal(isSafeRegexPattern(undefined), false);
+      assert.equal(isSafeRegexPattern("[0-9("), false); // Syntax error
+      assert.equal(isSafeRegexPattern("*invalid"), false); // Leading quantifier syntax error
+      assert.equal(isSafeRegexPattern("a".repeat(251)), false); // Exceeds length bound
     });
   });
 });

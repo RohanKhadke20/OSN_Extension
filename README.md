@@ -2,13 +2,14 @@
 
 [![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](manifest.json)
 [![Manifest](https://img.shields.io/badge/Manifest-V3-success.svg)](manifest.json)
-[![Tests](https://img.shields.io/badge/tests-100%20passing-brightgreen.svg)](tests/)
+[![Browsers](https://img.shields.io/badge/browsers-Chrome%20%7C%20Firefox%20%7C%20Safari-orange.svg)](scripts/pack.js)
+[![Tests](https://img.shields.io/badge/tests-127%20passing-brightgreen.svg)](tests/)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-100k%2B%20ops%2Fsec-orange.svg)](scripts/bench.js)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-blue.svg)](.github/workflows/ci.yml)
 [![Security](https://img.shields.io/badge/CSP-zero--external--network-blueviolet.svg)](manifest.json)
 [![Permissions](https://img.shields.io/badge/permissions-least--privilege-green.svg)](manifest.json)
 
-**OSN Guard** is a hardened, production-ready Manifest V3 Chrome extension engineered to safeguard user privacy, data integrity, and identity across Online Social Networks (OSNs) such as Twitter/X, Facebook, LinkedIn, Reddit, Threads, Bluesky, Instagram, YouTube comments, and interactive web applications.
+**OSN Guard** is a hardened, production-ready browser extension (Chromium Manifest V3, Firefox Gecko Event Page, and Safari Web Extension) engineered to safeguard user privacy, data integrity, and identity across Online Social Networks (OSNs) such as Twitter/X, Facebook, LinkedIn, Reddit, Threads, Bluesky, Instagram, YouTube comments, and interactive web applications.
 
 It provides zero-latency, on-device client-side protection against Personal Identifiable Information (PII) leaks, phishing links, IDN homoglyph / punycode spoofing, cryptocurrency drainers, modern Quishing (QR-code phishing), zero-width character evasion, and insecure data transmission — all operating with **zero external dependencies** and an airtight Content Security Policy blocking all external network connections.
 
@@ -111,6 +112,14 @@ Manifest V3 service workers terminate after inactivity. OSN Guard stores ephemer
 * **Accessible Keyboard Interaction**: Badges support full keyboard navigation (`Tab`, `Enter`, `Space` toggle, and `Escape` dismiss) with WCAG-compliant ARIA attributes.
 * **Hardened Configuration Backup / Import**: JSON backup importer validates schemas, sanitizes rule names, prevents prototype pollution (`__proto__`), and blocks ReDoS patterns.
 
+### 6. Reliability, Self-Healing & Ethical Growth (Phase 2 Hardening)
+* **Extension Invalidation Teardown**: When the extension is reloaded or updated, orphaned content scripts automatically disconnect mutation observers, cancel pending animation frames, and purge event listeners without throwing uncaught exceptions.
+* **Pathological DOM Bounding**: Hard caps on links (`MAX_PAGE_LINKS_LIMIT = 500`) and feed cards (`MAX_PAGE_CONTAINERS_LIMIT = 200`) with zero-allocation direct indexing prevent browser lockup on giant 10,000-node DOM trees.
+* **Storage Schema Self-Healing**: Automatically repairs corrupted or `NaN` counters, invalid booleans, and malformed arrays upon service worker startup without altering valid user rules.
+* **Pre-Reset Undo Rollback**: Factory reset and stats clearing create an encrypted local snapshot with a 10-second undo window.
+* **Local-Only Ethical Review Prompt**: Frequency-capped, zero-telemetry rating banner requiring at least 3 days retention and 5 threats or 50 links scanned, with a 14-day deferral cooldown.
+* **Cross-Browser Packaging Pipeline**: Zero-dependency MS-DOS/DEFLATE packager generating certified packages for Chromium MV3, Firefox Gecko Event Pages, and Safari Web Extensions.
+
 ---
 
 ## Project Structure
@@ -119,35 +128,41 @@ Manifest V3 service workers terminate after inactivity. OSN Guard stores ephemer
 osn-safety-scanner/
 ├── .github/
 │   └── workflows/ci.yml       # Automated CI matrix (Node 18/20/22 on Ubuntu & Windows)
+├── docs/
+│   ├── THREAT_MODEL.md        # Comprehensive STRIDE threat model & attack surface analysis
+│   ├── STORE_LISTING.md       # Production Chrome Web Store & AMO listing copy and ASO keywords
+│   ├── ROADMAP.md             # Strategic technical roadmap (v1.4 to v2.0)
+│   └── PROJECT_ENGINEERING_BASELINE.md # Architecture & readiness baseline
 ├── manifest.json              # Manifest V3 configuration (Least-privilege, strict CSP)
-├── background.js              # Service worker (tab threat store, badge sync, IPC validation, audit log)
-├── content.js                 # Batched DOM scanner (10ms frame budget), tooltips, PII banners, ARIA
+├── background.js              # Service worker (tab threat store, badge sync, IPC validation, audit log, self-healing)
+├── content.js                 # Batched DOM scanner, invalidation teardown, memory bounds, tooltips, PII banners
 ├── content.css                # Tooltip, badge, toast notification, and focus-visible styles
 ├── core/
 │   ├── url-analyzer.js        # URL safety engine, IDN homoglyphs, IP obfuscation, shorteners
 │   ├── pii-analyzer.js        # Multi-pattern PII detector, Luhn check, ISO 7064 IBAN, ReDoS linter
 │   └── scam-analyzer.js       # Zero-width evasion stripper, Quishing engine, Web3 drainer detector
 ├── popup/
-│   ├── popup.html             # Glassmorphic safety dashboard UI
-│   ├── popup.js               # Reactive score calculator, shield toggles, in-place rescan
-│   └── popup.css              # Dashboard styling, accent variables, SVG radial gauge
+│   ├── popup.html             # Glassmorphic safety dashboard UI & ethical review banner
+│   ├── popup.js               # Reactive score calculator, shield toggles, review prompt eligibility
+│   └── popup.css              # Dashboard styling, accent variables, SVG radial gauge, review card
 ├── options/
 │   ├── options.html           # Settings UI (PII sandbox, whitelist, audit log, metrics)
-│   ├── options.js             # Options controller, sandbox redactor, ReDoS checks, schema validator
-│   └── (shared styling)
+│   ├── options.js             # Options controller, sandbox redactor, pre-reset undo rollback
+│   └── options.css            # Extracted semantic stylesheet (zero inline styles)
 ├── scripts/
-│   ├── pack.js                # Zero-dependency MS-DOS/DEFLATE extension zip packager
+│   ├── pack.js                # Multi-target MS-DOS/DEFLATE packager (Chrome, Firefox, Safari)
 │   └── bench.js               # Zero-dependency performance benchmark suite (node:perf_hooks)
 ├── tests/
 │   ├── dashboard-score.test.js# Dashboard scoring engine & safety status transition tests
 │   ├── url-safety.test.js     # URL analyzer unit, IDN, shorteners, dangerous executables
 │   ├── pii-detector.test.js   # PII, Luhn algorithm, IBAN ISO 7064, LRU cache, ReDoS test suite
 │   ├── scam-detector.test.js  # Scam, quishing, zero-width evasion, Web3 drainer tests
-│   ├── storage-sync.test.js   # Whitelist wildcard, backup schema & ReDoS rejection tests
-│   ├── pack.test.js           # Extension packager & zip structure tests
+│   ├── storage-sync.test.js   # Whitelist wildcard, backup schema, self-healing & ReDoS rejection
+│   ├── review-prompt.test.js  # Ethical review prompt 4-criteria eligibility test suite
+│   ├── pack.test.js           # Multi-target extension packager & zip structure tests
 │   ├── bench.test.js          # Benchmark suite unit tests
 │   └── e2e/
-│       ├── extension-lifecycle.test.js # Headless browser extension lifecycle & UI E2E test
+│       ├── extension-lifecycle.test.js # Headless browser lifecycle, UI & pathological DOM burst E2E tests
 │       └── cdp-client.js      # Zero-dependency Chrome DevTools Protocol client
 ├── test-page.html             # Interactive browser sandbox for manual extension verification
 └── package.json               # Scripts, static check scripts, and project metadata
@@ -161,10 +176,10 @@ OSN Guard achieves microsecond-level execution latency to prevent any disruption
 
 | Component | Throughput | Average Latency |
 | :--- | :--- | :--- |
-| **URL Safety Analyzer** | ~100,000+ ops/sec | 0.0099 ms / op |
-| **PII Detection Engine** | ~117,000+ ops/sec | 0.0085 ms / op |
-| **PII Masking & Redaction** | ~120,000+ ops/sec | 0.0083 ms / op |
-| **Scam & Fraud Classifier** | ~47,000+ ops/sec | 0.0213 ms / op |
+| **URL Safety Analyzer** | ~107,000+ ops/sec | 0.0093 ms / op |
+| **PII Detection Engine** | ~124,000+ ops/sec | 0.0080 ms / op |
+| **PII Masking & Redaction** | ~131,000+ ops/sec | 0.0076 ms / op |
+| **Scam & Fraud Classifier** | ~54,000+ ops/sec | 0.0183 ms / op |
 
 *Measured on standard workstation hardware via `npm run bench`.*
 
@@ -178,17 +193,20 @@ OSN Guard uses Node.js's native test runner (`node:test` and `node:assert/strict
 # 1. Run static syntax verification across all source, script, and test files
 npm run check
 
-# 2. Run complete unit test suite (100 tests across 22 suites)
+# 2. Run complete unit test suite (127 tests across 25 suites)
 npm test
 
 # 3. Run performance benchmarks
 npm run bench
 
-# 4. Run automated headless Chrome/Edge E2E lifecycle tests
+# 4. Run automated headless Chrome/Edge E2E lifecycle & pathological burst tests
 npm run test:e2e
 
-# 5. Build production Chrome Web Store distribution archive
-npm run pack
+# 5. Build multi-target production distribution archives
+npm run pack:chrome     # Builds dist/osn-guard-safety-privacy-shield-v1.3.0.zip
+npm run pack:firefox    # Builds dist/osn-guard-safety-privacy-shield-firefox-v1.3.0.zip
+npm run pack:safari     # Builds dist/osn-guard-safety-privacy-shield-safari-v1.3.0.zip
+npm run pack:all        # Builds all three browser targets simultaneously
 ```
 
 ---

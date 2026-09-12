@@ -352,6 +352,12 @@ input:checked + .slider:before {
   transform: translateX(16px);
 }
 
+.switch input:disabled + .slider {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+}
+
 /* Threats Section */
 .threats-section {
   display: flex;

@@ -75,6 +75,7 @@ describe("Distribution Packager (scripts/pack.js)", () => {
 
       // Must include production extension files
       assert.ok(relativePaths.includes("manifest.json"), "manifest.json missing");
+      assert.ok(relativePaths.includes("managed_schema.json"), "managed_schema.json missing");
       assert.ok(relativePaths.includes("background.js"), "background.js missing");
       assert.ok(relativePaths.includes("content.js"), "content.js missing");
       assert.ok(relativePaths.includes("content.css"), "content.css missing");

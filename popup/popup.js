@@ -201,39 +201,86 @@ if (typeof document !== "undefined") {
     }
   };
 
+  let managedShields = {};
+
+  const fetchManagedPolicy = (callback) => {
+    if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({ action: "getManagedPolicy" }, (response) => {
+        if (!chrome.runtime.lastError && response && response.managed && response.managed.enforcedShields) {
+          managedShields = response.managed.enforcedShields;
+        }
+        if (callback) callback();
+      });
+    } else if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.managed) {
+      chrome.storage.managed.get("enforcedShields", (managedData) => {
+        if (!chrome.runtime.lastError && managedData && managedData.enforcedShields) {
+          managedShields = managedData.enforcedShields;
+        }
+        if (callback) callback();
+      });
+    } else {
+      if (callback) callback();
+    }
+  };
+
+  const applyManagedShields = () => {
+    if (!managedShields || typeof managedShields !== "object") return;
+    const toggles = {
+      pii: piiToggle,
+      url: urlToggle,
+      content: contentToggle,
+      security: securityToggle
+    };
+    for (const [key, isEnforced] of Object.entries(managedShields)) {
+      if (toggles[key] && isEnforced === true) {
+        toggles[key].checked = true;
+        toggles[key].disabled = true;
+        toggles[key].setAttribute("title", "Enforced by organization policy");
+        const parentLabel = toggles[key].closest(".switch") || toggles[key].parentElement;
+        if (parentLabel) {
+          parentLabel.setAttribute("title", "Enforced by organization policy");
+        }
+      }
+    }
+  };
+
   // Load configuration and statistics
   const loadStatsAndSettings = (callback) => {
-    chrome.storage.local.get(["shields", "stats", "whitelistedDomains", "installedAt", "reviewState"], (data) => {
-      if (data.shields) {
-        piiToggle.checked = !!data.shields.pii;
-        urlToggle.checked = !!data.shields.url;
-        contentToggle.checked = !!data.shields.content;
-        securityToggle.checked = !!data.shields.security;
-      }
+    fetchManagedPolicy(() => {
+      chrome.storage.local.get(["shields", "stats", "whitelistedDomains", "installedAt", "reviewState"], (data) => {
+        if (data.shields) {
+          piiToggle.checked = !!data.shields.pii;
+          urlToggle.checked = !!data.shields.url;
+          contentToggle.checked = !!data.shields.content;
+          securityToggle.checked = !!data.shields.security;
+        }
 
-      if (data.whitelistedDomains) {
-        whitelistedDomains = data.whitelistedDomains;
-      }
+        applyManagedShields();
 
-      if (data.stats) {
-        statScanned.textContent = data.stats.linksScanned || 0;
-        statPii.textContent = data.stats.piiBlockedCount || 0;
-        statThreats.textContent = data.stats.threatsDetected || 0;
-      }
+        if (data.whitelistedDomains) {
+          whitelistedDomains = data.whitelistedDomains;
+        }
 
-      checkReviewPromptEligibility(data);
+        if (data.stats) {
+          statScanned.textContent = data.stats.linksScanned || 0;
+          statPii.textContent = data.stats.piiBlockedCount || 0;
+          statThreats.textContent = data.stats.threatsDetected || 0;
+        }
 
-      if (callback) callback();
+        checkReviewPromptEligibility(data);
+
+        if (callback) callback();
+      });
     });
   };
 
   // Save checkbox updates
   const saveShields = () => {
     const shields = {
-      pii: piiToggle.checked,
-      url: urlToggle.checked,
-      content: contentToggle.checked,
-      security: securityToggle.checked
+      pii: managedShields.pii === true ? true : piiToggle.checked,
+      url: managedShields.url === true ? true : urlToggle.checked,
+      content: managedShields.content === true ? true : contentToggle.checked,
+      security: managedShields.security === true ? true : securityToggle.checked
     };
 
     chrome.storage.local.set({ shields }, () => {

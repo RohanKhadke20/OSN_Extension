@@ -14,6 +14,7 @@ const zlib = require("node:zlib");
 // Files and directories included in production build
 const INCLUDED_PATTERNS = [
   "manifest.json",
+  "managed_schema.json",
   "background.js",
   "content.js",
   "content.css",

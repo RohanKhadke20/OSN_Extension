@@ -8,6 +8,9 @@
     "activeTab",
     "contextMenus"
   ],
+  "storage": {
+    "managed_schema": "managed_schema.json"
+  },
   "background": {
     "service_worker": "background.js"
   },

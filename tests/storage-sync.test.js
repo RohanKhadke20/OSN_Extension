@@ -2,7 +2,7 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const { isDomainWhitelisted, isSafeDomain } = require("../core/url-analyzer.js");
 const { detectPii, isSafeRegexPattern } = require("../core/pii-analyzer.js");
-const { sanitizeAndRepairStorage } = require("../background.js");
+const { sanitizeAndRepairStorage, mergeManagedSettings } = require("../background.js");
 
 describe("Storage & Integration Helpers", () => {
   describe("Domain Whitelist Matching Logic", () => {
@@ -483,6 +483,86 @@ describe("Storage & Integration Helpers", () => {
       const { updates, needsRepair } = sanitizeAndRepairStorage(validData);
       assert.equal(needsRepair, false);
       assert.deepEqual(updates, {});
+    });
+  });
+
+  describe("Enterprise Managed Policy Synchronization (Module 3C)", () => {
+    it("returns unaffected local configuration when managedData is null, undefined, or empty", () => {
+      const local = {
+        whitelistedDomains: ["mycorp.com"],
+        shields: { pii: true, url: true, content: true, security: true },
+        customPiiPatterns: [{ name: "Internal Code", pattern: "INT-\\d{4}" }]
+      };
+      assert.deepEqual(mergeManagedSettings(local, null), local);
+      assert.deepEqual(mergeManagedSettings(local, undefined), local);
+      assert.deepEqual(mergeManagedSettings(local, {}), local);
+    });
+
+    it("merges forcedWhitelistedDomains without duplicates into effective whitelist", () => {
+      const local = {
+        whitelistedDomains: ["mycorp.com", "sub.vendor.io"]
+      };
+      const managed = {
+        forcedWhitelistedDomains: ["forced.corp.com", "mycorp.com", "*.enterprise.net"]
+      };
+      const merged = mergeManagedSettings(local, managed);
+      assert.deepEqual(merged.whitelistedDomains, ["mycorp.com", "sub.vendor.io", "forced.corp.com", "*.enterprise.net"]);
+      assert.deepEqual(merged.managedDomains, ["forced.corp.com", "mycorp.com", "*.enterprise.net"]);
+    });
+
+    it("merges mandatoryCustomPiiRules, marking them managed: true and taking precedence over local rules", () => {
+      const local = {
+        customPiiPatterns: [
+          { name: "Project Apollo", pattern: "OLD-\\d+", severity: "warning" },
+          { name: "User Custom", pattern: "USR-\\d+", severity: "warning" }
+        ]
+      };
+      const managed = {
+        mandatoryCustomPiiRules: [
+          { name: "Project Apollo", pattern: "APL-[0-9]{6}", severity: "critical" },
+          { name: "Corp Secret", pattern: "SEC-[A-Z]{4}", severity: "critical" }
+        ]
+      };
+      const merged = mergeManagedSettings(local, managed);
+      assert.equal(merged.customPiiPatterns.length, 3);
+      assert.equal(merged.customPiiPatterns[0].name, "Project Apollo");
+      assert.equal(merged.customPiiPatterns[0].pattern, "APL-[0-9]{6}");
+      assert.equal(merged.customPiiPatterns[0].managed, true);
+      assert.equal(merged.customPiiPatterns[1].name, "Corp Secret");
+      assert.equal(merged.customPiiPatterns[1].managed, true);
+      assert.equal(merged.customPiiPatterns[2].name, "User Custom");
+    });
+
+    it("enforces organizational shield states, locking toggles to policy requirements", () => {
+      const local = {
+        shields: { pii: false, url: false, content: true, security: false }
+      };
+      const managed = {
+        enforcedShields: { pii: true, url: true, security: true }
+      };
+      const merged = mergeManagedSettings(local, managed);
+      assert.equal(merged.shields.pii, true);
+      assert.equal(merged.shields.url, true);
+      assert.equal(merged.shields.content, true);
+      assert.equal(merged.shields.security, true);
+      assert.deepEqual(merged.managedShields, { pii: true, url: true, security: true });
+    });
+
+    it("handles malformed and adversarial managedData payloads safely", () => {
+      const local = {
+        whitelistedDomains: ["safe.com"],
+        shields: { pii: true, url: true, content: true, security: true },
+        customPiiPatterns: []
+      };
+      const malformed = {
+        forcedWhitelistedDomains: "not-an-array",
+        mandatoryCustomPiiRules: 42,
+        enforcedShields: "not-an-object"
+      };
+      const merged = mergeManagedSettings(local, malformed);
+      assert.deepEqual(merged.whitelistedDomains, ["safe.com"]);
+      assert.deepEqual(merged.shields, { pii: true, url: true, content: true, security: true });
+      assert.deepEqual(merged.customPiiPatterns, []);
     });
   });
 });

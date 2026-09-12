@@ -47,9 +47,54 @@ document.addEventListener("DOMContentLoaded", () => {
   let localPiiRules = [];
   let localWhitelist = [];
   let localAuditLog = [];
+  let managedPolicy = {};
 
   let _undoTimer = null;
   let _preResetSnapshot = null;
+
+  // Helper to fetch enterprise managed policies
+  const fetchManagedPolicy = (callback) => {
+    if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({ action: "getManagedPolicy" }, (response) => {
+        if (!chrome.runtime.lastError && response && response.managed) {
+          managedPolicy = response.managed;
+        }
+        if (callback) callback();
+      });
+    } else if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.managed) {
+      chrome.storage.managed.get(["forcedWhitelistedDomains", "mandatoryCustomPiiRules", "enforcedShields"], (managedData) => {
+        if (!chrome.runtime.lastError && managedData) {
+          managedPolicy = managedData;
+        }
+        if (callback) callback();
+      });
+    } else {
+      if (callback) callback();
+    }
+  };
+
+  const hasManagedPolicy = () => {
+    return !!(
+      (Array.isArray(managedPolicy.forcedWhitelistedDomains) && managedPolicy.forcedWhitelistedDomains.length > 0) ||
+      (Array.isArray(managedPolicy.mandatoryCustomPiiRules) && managedPolicy.mandatoryCustomPiiRules.length > 0) ||
+      (managedPolicy.enforcedShields && Object.keys(managedPolicy.enforcedShields).length > 0)
+    );
+  };
+
+  const isRuleManaged = (rule) => {
+    if (rule && rule.managed) return true;
+    if (Array.isArray(managedPolicy.mandatoryCustomPiiRules)) {
+      return managedPolicy.mandatoryCustomPiiRules.some(mr => mr.name === rule.name || mr.pattern === rule.pattern);
+    }
+    return false;
+  };
+
+  const isDomainManaged = (domain) => {
+    if (Array.isArray(managedPolicy.forcedWhitelistedDomains)) {
+      return managedPolicy.forcedWhitelistedDomains.includes(domain);
+    }
+    return false;
+  };
 
   // Helper to show success notice with optional Undo rollback
   const triggerSuccessAlert = (message = "Settings updated successfully.", undoCallback = null, durationMs = 3000) => {
@@ -116,23 +161,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Load and Render Option lists
   const loadConfig = () => {
-    chrome.storage.local.get(["customPiiPatterns", "whitelistedDomains", "stats", "auditLog"], (data) => {
-      localPiiRules = Array.isArray(data.customPiiPatterns) ? data.customPiiPatterns : [];
-      localWhitelist = Array.isArray(data.whitelistedDomains) ? data.whitelistedDomains : [];
-      localAuditLog = Array.isArray(data.auditLog) ? data.auditLog : [];
+    fetchManagedPolicy(() => {
+      const banner = document.getElementById("managed-policy-banner");
+      if (banner) {
+        banner.style.display = hasManagedPolicy() ? "flex" : "none";
+      }
 
-      // Ensure every rule has an ID
-      localPiiRules.forEach((rule, idx) => {
-        if (!rule.id) {
-          rule.id = "rule_" + Date.now() + "_" + idx;
-        }
+      chrome.storage.local.get(["customPiiPatterns", "whitelistedDomains", "stats", "auditLog"], (data) => {
+        localPiiRules = Array.isArray(data.customPiiPatterns) ? data.customPiiPatterns : [];
+        localWhitelist = Array.isArray(data.whitelistedDomains) ? data.whitelistedDomains : [];
+        localAuditLog = Array.isArray(data.auditLog) ? data.auditLog : [];
+
+        // Ensure every rule has an ID
+        localPiiRules.forEach((rule, idx) => {
+          if (!rule.id) {
+            rule.id = "rule_" + Date.now() + "_" + idx;
+          }
+        });
+
+        renderPiiRules();
+        renderWhitelist();
+        renderStats(data.stats);
+        renderAuditLog(localAuditLog);
+        updateSandbox();
       });
-
-      renderPiiRules();
-      renderWhitelist();
-      renderStats(data.stats);
-      renderAuditLog(localAuditLog);
-      updateSandbox();
     });
   };
 
@@ -168,6 +220,16 @@ document.addEventListener("DOMContentLoaded", () => {
       badge.className = `badge-tag ${rule.severity || "warning"}`;
       badge.textContent = rule.severity || "warning";
 
+      details.append(strongName, badge);
+
+      const isManaged = isRuleManaged(rule);
+      if (isManaged) {
+        const managedBadge = document.createElement("span");
+        managedBadge.className = "badge-tag managed";
+        managedBadge.textContent = "🏢 Enforced by IT";
+        details.appendChild(managedBadge);
+      }
+
       const br = document.createElement("br");
 
       const patternDesc = document.createElement("span");
@@ -178,13 +240,19 @@ document.addEventListener("DOMContentLoaded", () => {
       code.textContent = rule.pattern;
       patternDesc.appendChild(code);
 
-      details.append(strongName, badge, br, patternDesc);
+      details.append(br, patternDesc);
 
       const delBtn = document.createElement("button");
       delBtn.className = "icon-btn delete-pii-btn osn-delete-btn";
       delBtn.setAttribute("aria-label", `Delete ${rule.name}`);
       delBtn.textContent = "✕";
-      delBtn.onclick = () => deletePiiRule(rule.id);
+      if (isManaged) {
+        delBtn.disabled = true;
+        delBtn.classList.add("disabled");
+        delBtn.setAttribute("title", "Enforced by organization policy");
+      } else {
+        delBtn.onclick = () => deletePiiRule(rule.id);
+      }
 
       row.append(details, delBtn);
       piiRulesContainer.appendChild(row);
@@ -193,6 +261,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Delete PII rule by ID
   const deletePiiRule = (ruleId) => {
+    const target = localPiiRules.find(r => r.id === ruleId);
+    if (target && isRuleManaged(target)) {
+      triggerErrorAlert("Cannot delete rule: Enforced by IT administrator.");
+      return;
+    }
     localPiiRules = localPiiRules.filter(r => r.id !== ruleId);
     chrome.storage.local.set({ customPiiPatterns: localPiiRules }, () => {
       renderPiiRules();
@@ -280,11 +353,25 @@ document.addEventListener("DOMContentLoaded", () => {
       strong.textContent = domain;
       details.appendChild(strong);
 
+      const isManaged = isDomainManaged(domain);
+      if (isManaged) {
+        const managedBadge = document.createElement("span");
+        managedBadge.className = "badge-tag managed";
+        managedBadge.textContent = "🏢 Enforced by IT";
+        details.appendChild(managedBadge);
+      }
+
       const delBtn = document.createElement("button");
       delBtn.className = "icon-btn delete-whitelist-btn osn-delete-btn";
       delBtn.setAttribute("aria-label", `Remove ${domain} from whitelist`);
       delBtn.textContent = "✕";
-      delBtn.onclick = () => deleteWhitelistDomain(domain);
+      if (isManaged) {
+        delBtn.disabled = true;
+        delBtn.classList.add("disabled");
+        delBtn.setAttribute("title", "Enforced by organization policy");
+      } else {
+        delBtn.onclick = () => deleteWhitelistDomain(domain);
+      }
 
       row.append(details, delBtn);
       whitelistContainer.appendChild(row);
@@ -292,6 +379,10 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const deleteWhitelistDomain = (domain) => {
+    if (isDomainManaged(domain)) {
+      triggerErrorAlert("Cannot remove domain: Enforced by IT administrator.");
+      return;
+    }
     localWhitelist = localWhitelist.filter(d => d !== domain);
     chrome.storage.local.set({ whitelistedDomains: localWhitelist }, () => {
       renderWhitelist();

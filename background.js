@@ -185,6 +185,117 @@ function sanitizeAndRepairStorage(data) {
   return { updates, needsRepair };
 }
 
+/**
+ * Loads enterprise-enforced policies from chrome.storage.managed
+ * @param {Function} callback - ({ forcedWhitelistedDomains, mandatoryCustomPiiRules, enforcedShields }) => void
+ */
+function getManagedPolicy(callback) {
+  if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.managed) {
+    if (callback) callback({});
+    return;
+  }
+
+  chrome.storage.managed.get(["forcedWhitelistedDomains", "mandatoryCustomPiiRules", "enforcedShields"], (managedData) => {
+    if (chrome.runtime.lastError || !managedData || typeof managedData !== "object") {
+      if (callback) callback({});
+      return;
+    }
+    if (callback) callback(managedData);
+  });
+}
+
+/**
+ * Merges enterprise-managed policies with local configuration.
+ * Managed settings take precedence and cannot be disabled by users.
+ * @param {Object} localData - User local storage settings
+ * @param {Object} managedData - Enterprise managed policy data
+ * @returns {Object} Merged effective configuration
+ */
+function mergeManagedSettings(localData, managedData) {
+  const effective = { ...localData };
+
+  if (!managedData || typeof managedData !== "object") {
+    return effective;
+  }
+
+  // 1. Forced whitelisted domains
+  if (Array.isArray(managedData.forcedWhitelistedDomains) && managedData.forcedWhitelistedDomains.length > 0) {
+    const existing = Array.isArray(effective.whitelistedDomains) ? effective.whitelistedDomains : [];
+    effective.whitelistedDomains = [...new Set([...existing, ...managedData.forcedWhitelistedDomains])];
+    effective.managedDomains = managedData.forcedWhitelistedDomains;
+  }
+
+  // 2. Mandatory custom PII rules
+  if (Array.isArray(managedData.mandatoryCustomPiiRules) && managedData.mandatoryCustomPiiRules.length > 0) {
+    const existing = Array.isArray(effective.customPiiPatterns) ? effective.customPiiPatterns : [];
+    const managedNames = new Set(managedData.mandatoryCustomPiiRules.map(r => r.name));
+    const filteredExisting = existing.filter(r => !managedNames.has(r.name));
+    effective.customPiiPatterns = [
+      ...managedData.mandatoryCustomPiiRules.map(r => ({ ...r, managed: true })),
+      ...filteredExisting
+    ];
+    effective.managedPiiRules = managedData.mandatoryCustomPiiRules;
+  }
+
+  // 3. Enforced shields
+  if (managedData.enforcedShields && typeof managedData.enforcedShields === "object") {
+    effective.shields = {
+      ...(effective.shields || { pii: true, url: true, content: true, security: true })
+    };
+    for (const [shieldKey, isEnforced] of Object.entries(managedData.enforcedShields)) {
+      if (typeof isEnforced === "boolean") {
+        effective.shields[shieldKey] = isEnforced;
+      }
+    }
+    effective.managedShields = managedData.enforcedShields;
+  }
+
+  return effective;
+}
+
+/**
+ * Synchronizes managed policy into chrome.storage.local to ensure
+ * content scripts and extension pages reflect enterprise enforcement immediately.
+ * @param {Function} callback - Optional completion callback
+ */
+function syncManagedPolicy(callback) {
+  if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+    if (callback) callback();
+    return;
+  }
+
+  getManagedPolicy((managedData) => {
+    if (!managedData || Object.keys(managedData).length === 0) {
+      if (callback) callback();
+      return;
+    }
+
+    chrome.storage.local.get(["whitelistedDomains", "customPiiPatterns", "shields"], (localData) => {
+      const merged = mergeManagedSettings(localData, managedData);
+      const updates = {};
+      if (merged.whitelistedDomains) updates.whitelistedDomains = merged.whitelistedDomains;
+      if (merged.customPiiPatterns) updates.customPiiPatterns = merged.customPiiPatterns;
+      if (merged.shields) updates.shields = merged.shields;
+      if (merged.managedDomains) updates.managedDomains = merged.managedDomains;
+      if (merged.managedPiiRules) updates.managedPiiRules = merged.managedPiiRules;
+      if (merged.managedShields) updates.managedShields = merged.managedShields;
+
+      chrome.storage.local.set(updates, () => {
+        if (callback) callback();
+      });
+    });
+  });
+}
+
+// Watch for live enterprise policy updates via MDM / GPO
+if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === "managed") {
+      syncManagedPolicy();
+    }
+  });
+}
+
 // Auto-repair storage schema and ensure defaults
 function ensureStorageIntegrity(callback) {
   if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
@@ -213,7 +324,9 @@ function ensureStorageIntegrity(callback) {
 if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onStartup) {
   chrome.runtime.onStartup.addListener(() => {
     reconcileOrphanedTabs();
-    ensureStorageIntegrity();
+    ensureStorageIntegrity(() => {
+      syncManagedPolicy();
+    });
   });
 }
 
@@ -235,6 +348,7 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onInstalle
       }
     });
     ensureStorageIntegrity(() => {
+      syncManagedPolicy();
       console.log("[OSN Guard] Service worker initialized and storage integrity verified.");
     });
   });
@@ -390,6 +504,13 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage)
       return true;
     }
 
+    else if (message.action === "getManagedPolicy") {
+      getManagedPolicy((policy) => {
+        sendResponse({ managed: policy });
+      });
+      return true;
+    }
+
     else if (message.action === "checkUrlSafety") {
       const { url } = message;
       if (typeof url !== "string" || !url) {
@@ -398,9 +519,14 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage)
       }
 
       chrome.storage.local.get("whitelistedDomains", (data) => {
-        const whitelist = data.whitelistedDomains || [];
-        const safetyResult = OSNUrlAnalyzer.analyzeUrlSafety(url, whitelist);
-        sendResponse(safetyResult);
+        let whitelist = Array.isArray(data.whitelistedDomains) ? data.whitelistedDomains : [];
+        getManagedPolicy((managed) => {
+          if (Array.isArray(managed.forcedWhitelistedDomains)) {
+            whitelist = [...new Set([...whitelist, ...managed.forcedWhitelistedDomains])];
+          }
+          const safetyResult = OSNUrlAnalyzer.analyzeUrlSafety(url, whitelist);
+          sendResponse(safetyResult);
+        });
       });
 
       return true;
@@ -567,7 +693,10 @@ if (typeof module !== "undefined" && module.exports) {
     ensureStorageIntegrity,
     appendAuditLog,
     updateGlobalStats,
-    getSessionStorage
+    getSessionStorage,
+    getManagedPolicy,
+    mergeManagedSettings,
+    syncManagedPolicy
   };
 }
 

@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-03/schema#",
+  "type": "object",
+  "properties": {
+    "forcedWhitelistedDomains": {
+      "title": "Forced Whitelisted Domains",
+      "description": "Enterprise-mandated domains that bypass link inspection and cannot be removed by employees.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mandatoryCustomPiiRules": {
+      "title": "Mandatory Custom PII Rules",
+      "description": "Enterprise-mandated regular expression rules to block internal project codenames and confidential data leaks.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "title": "Rule Name",
+            "type": "string"
+          },
+          "pattern": {
+            "title": "Regex Pattern",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Alert Severity",
+            "type": "string",
+            "enum": ["warning", "critical"]
+          }
+        },
+        "required": ["name", "pattern"]
+      }
+    },
+    "enforcedShields": {
+      "title": "Enforced Protection Shields",
+      "description": "Shield protection toggles that are enforced on corporate endpoints.",
+      "type": "object",
+      "properties": {
+        "pii": {
+          "title": "Enforce PII Shield",
+          "type": "boolean"
+        },
+        "url": {
+          "title": "Enforce URL Safety Shield",
+          "type": "boolean"
+        },
+        "content": {
+          "title": "Enforce Scam Content Shield",
+          "type": "boolean"
+        },
+        "security": {
+          "title": "Enforce Insecure Form Shield",
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

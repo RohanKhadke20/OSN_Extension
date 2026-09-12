@@ -251,9 +251,12 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
       await swClient.connect();
       await swClient.evaluate(`
         new Promise((resolve) => {
-          chrome.tabs.query({ url: "${testPageUrl}" }, (tabs) => {
-            if (tabs && tabs.length > 0) {
-              chrome.tabs.sendMessage(tabs[0].id, {
+          chrome.tabs.query({}, (tabs) => {
+            const targetTab = Array.isArray(tabs)
+              ? (tabs.find(t => (t.url || "").includes("test-page.html")) || tabs[tabs.length - 1])
+              : null;
+            if (targetTab && targetTab.id) {
+              chrome.tabs.sendMessage(targetTab.id, {
                 action: "displayScanResult",
                 targetType: "link",
                 targetValue: "https://win-iphone-now.xyz",

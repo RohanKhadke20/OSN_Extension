@@ -141,9 +141,29 @@
       </div>
     </section>
 
+    <!-- Ethical Review Prompt (Local-only, frequency-capped) -->
+    <section class="review-prompt-section hidden" id="review-prompt" aria-label="Extension Feedback">
+      <div class="review-card">
+        <div class="review-header">
+          <div class="review-badge">
+            <span class="review-icon">⭐</span>
+            <span class="review-title">Enjoying OSN Guard?</span>
+          </div>
+          <button class="review-close-btn" id="review-close-btn" title="Dismiss" aria-label="Dismiss">✕</button>
+        </div>
+        <p class="review-body" id="review-prompt-text">
+          OSN Guard is protecting your browsing with zero tracking and zero telemetry. If it has helped keep you safe, please consider leaving a review!
+        </p>
+        <div class="review-actions">
+          <button class="review-btn review-btn-primary" id="review-rate-btn">⭐ Rate Extension</button>
+          <button class="review-btn review-btn-secondary" id="review-later-btn">Maybe Later</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Footer -->
     <footer class="app-footer">
-      <span>Protected by OSN Guard v1.2</span>
+      <span>Protected by OSN Guard v1.3</span>
       <a href="#" id="view-options-link">Advanced Options</a>
     </footer>
   </div>

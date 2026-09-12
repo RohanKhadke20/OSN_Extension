@@ -442,6 +442,35 @@ describe("Storage & Integration Helpers", () => {
       assert.deepEqual(updates.auditLog, []);
     });
 
+    it("repairs corrupted or non-object reviewState when present", () => {
+      const corruptedReview = {
+        reviewState: {
+          dismissed: "not-bool",
+          completed: 123,
+          lastPromptedAt: -500
+        }
+      };
+
+      const { updates, needsRepair } = sanitizeAndRepairStorage(corruptedReview);
+      assert.equal(needsRepair, true);
+      assert.deepEqual(updates.reviewState, {
+        dismissed: false,
+        completed: false,
+        lastPromptedAt: 0
+      });
+    });
+
+    it("repairs invalid or negative installedAt timestamps when present", () => {
+      const corruptedInstall = {
+        installedAt: -9999
+      };
+
+      const { updates, needsRepair } = sanitizeAndRepairStorage(corruptedInstall);
+      assert.equal(needsRepair, true);
+      assert.ok(typeof updates.installedAt === "number");
+      assert.ok(updates.installedAt > 0);
+    });
+
     it("returns needsRepair: false when storage schema is already completely valid", () => {
       const validData = {
         shields: { pii: true, url: false, content: true, security: true },

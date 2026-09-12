@@ -1,6 +1,62 @@
 // JS control logic for OSN Guard Popup Dashboard
-document.addEventListener("DOMContentLoaded", () => {
-  "use strict";
+
+/**
+ * Evaluates whether the user is eligible to see the ethical review prompt.
+ * Local-only, frequency-capped, zero telemetry.
+ *
+ * Rules:
+ * 1. Usage: >= 5 threats detected OR >= 50 links scanned
+ * 2. Retention: Installed for at least 3 days (3 * 24 * 60 * 60 * 1000 ms)
+ * 3. Never dismissed or completed: !reviewState.dismissed && !reviewState.completed
+ * 4. Frequency cap: If deferred, cooldown of 14 days (14 * 24 * 60 * 60 * 1000 ms)
+ *
+ * @param {Object} data - Storage data containing stats, installedAt, reviewState
+ * @param {number} [currentTime] - Current timestamp (defaults to Date.now())
+ * @returns {{ eligible: boolean, reason?: string }}
+ */
+function isReviewPromptEligible(data, currentTime = Date.now()) {
+  if (!data || typeof data !== "object") {
+    return { eligible: false, reason: "No storage data available" };
+  }
+
+  const stats = data.stats || {};
+  const threats = typeof stats.threatsDetected === "number" ? stats.threatsDetected : 0;
+  const links = typeof stats.linksScanned === "number" ? stats.linksScanned : 0;
+
+  // 1. Usage threshold
+  if (threats < 5 && links < 50) {
+    return { eligible: false, reason: "Usage threshold not met (need 5 threats or 50 links)" };
+  }
+
+  // 2. Minimum install retention (3 days)
+  const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+  const installedAt = typeof data.installedAt === "number" ? data.installedAt : 0;
+  if (installedAt <= 0 || (currentTime - installedAt) < THREE_DAYS_MS) {
+    return { eligible: false, reason: "Minimum install age of 3 days not met" };
+  }
+
+  // 3. Not dismissed or already completed
+  const reviewState = data.reviewState || {};
+  if (reviewState.dismissed === true) {
+    return { eligible: false, reason: "User previously dismissed review prompt" };
+  }
+  if (reviewState.completed === true) {
+    return { eligible: false, reason: "User previously completed review" };
+  }
+
+  // 4. Frequency capping (14 days cooldown)
+  const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+  const lastPromptedAt = typeof reviewState.lastPromptedAt === "number" ? reviewState.lastPromptedAt : 0;
+  if (lastPromptedAt > 0 && (currentTime - lastPromptedAt) < FOURTEEN_DAYS_MS) {
+    return { eligible: false, reason: "Frequency cooldown active (prompted within last 14 days)" };
+  }
+
+  return { eligible: true };
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("DOMContentLoaded", () => {
+    "use strict";
 
   const settingsBtn = document.getElementById("settings-btn");
   const optionsLink = document.getElementById("view-options-link");
@@ -43,9 +99,111 @@ document.addEventListener("DOMContentLoaded", () => {
     openOptions();
   });
 
+  // Review prompt elements
+  const reviewPromptEl = document.getElementById("review-prompt");
+  const reviewTextEl = document.getElementById("review-prompt-text");
+  const reviewRateBtn = document.getElementById("review-rate-btn");
+  const reviewLaterBtn = document.getElementById("review-later-btn");
+  const reviewCloseBtn = document.getElementById("review-close-btn");
+
+  // Local-only, ethical review prompt handler
+  const checkReviewPromptEligibility = (data) => {
+    if (!reviewPromptEl) return;
+
+    // Seed installedAt if missing so the retention clock begins tracking locally
+    if (!data || typeof data.installedAt !== "number" || data.installedAt <= 0) {
+      const now = Date.now();
+      chrome.storage.local.set({ installedAt: now });
+      data = data || {};
+      data.installedAt = now;
+    }
+
+    const { eligible } = isReviewPromptEligible(data);
+    if (!eligible) {
+      reviewPromptEl.classList.add("hidden");
+      return;
+    }
+
+    const stats = data.stats || {};
+    const threats = stats.threatsDetected || 0;
+    const links = stats.linksScanned || 0;
+
+    if (reviewTextEl) {
+      if (threats > 0) {
+        reviewTextEl.textContent = `OSN Guard has checked ${links} links and blocked ${threats} threats with zero external telemetry. If it has helped keep you safe, please consider leaving a review!`;
+      } else {
+        reviewTextEl.textContent = `OSN Guard has safely checked ${links} links with 100% local privacy. If you enjoy safe browsing, please consider leaving a quick review!`;
+      }
+    }
+
+    reviewPromptEl.classList.remove("hidden");
+
+    const hide = () => {
+      reviewPromptEl.classList.add("hidden");
+    };
+
+    if (reviewRateBtn) {
+      reviewRateBtn.onclick = () => {
+        const reviewState = data.reviewState || {};
+        const updated = {
+          ...reviewState,
+          dismissed: false,
+          completed: true,
+          lastPromptedAt: Date.now()
+        };
+        chrome.storage.local.set({ reviewState: updated }, () => {
+          hide();
+          const isFirefox = typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.includes("Firefox");
+          const extensionId = (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id)
+            ? chrome.runtime.id
+            : "osn-guard";
+          const reviewUrl = isFirefox
+            ? "https://addons.mozilla.org/firefox/addon/osn-guard/"
+            : `https://chromewebstore.google.com/detail/${extensionId}/reviews`;
+
+          if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
+            chrome.tabs.create({ url: reviewUrl });
+          } else {
+            window.open(reviewUrl, "_blank");
+          }
+        });
+      };
+    }
+
+    if (reviewLaterBtn) {
+      reviewLaterBtn.onclick = () => {
+        const reviewState = data.reviewState || {};
+        const updated = {
+          ...reviewState,
+          dismissed: false,
+          completed: false,
+          lastPromptedAt: Date.now()
+        };
+        chrome.storage.local.set({ reviewState: updated }, () => {
+          hide();
+        });
+      };
+    }
+
+    if (reviewCloseBtn) {
+      reviewCloseBtn.onclick = () => {
+        const reviewState = data.reviewState || {};
+        const updated = {
+          ...reviewState,
+          dismissed: true,
+          completed: false,
+          lastPromptedAt: Date.now()
+        };
+        chrome.storage.local.set({ reviewState: updated }, () => {
+          hide();
+        });
+      };
+    }
+  };
+
   // Load configuration and statistics
   const loadStatsAndSettings = (callback) => {
-    chrome.storage.local.get(["shields", "stats", "whitelistedDomains"], (data) => {
+    chrome.storage.local.get(["shields", "stats", "whitelistedDomains", "installedAt", "reviewState"], (data) => {
       if (data.shields) {
         piiToggle.checked = !!data.shields.pii;
         urlToggle.checked = !!data.shields.url;
@@ -62,6 +220,8 @@ document.addEventListener("DOMContentLoaded", () => {
         statPii.textContent = data.stats.piiBlockedCount || 0;
         statThreats.textContent = data.stats.threatsDetected || 0;
       }
+
+      checkReviewPromptEligibility(data);
 
       if (callback) callback();
     });
@@ -362,3 +522,11 @@ document.addEventListener("DOMContentLoaded", () => {
     updateSafetyStatus();
   });
 });
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    isReviewPromptEligible
+  };
+}
+

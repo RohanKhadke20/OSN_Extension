@@ -154,6 +154,34 @@ function sanitizeAndRepairStorage(data) {
     needsRepair = true;
   }
 
+  // 6. Review state verification (if key is present in data)
+  if (data && data.reviewState !== undefined) {
+    if (!data.reviewState || typeof data.reviewState !== "object" || Array.isArray(data.reviewState)) {
+      updates.reviewState = { dismissed: false, completed: false, lastPromptedAt: 0 };
+      needsRepair = true;
+    } else {
+      const rs = data.reviewState;
+      const repairedReview = {
+        dismissed: typeof rs.dismissed === "boolean" ? rs.dismissed : false,
+        completed: typeof rs.completed === "boolean" ? rs.completed : false,
+        lastPromptedAt: (typeof rs.lastPromptedAt === "number" && Number.isFinite(rs.lastPromptedAt) && rs.lastPromptedAt >= 0)
+          ? Math.floor(rs.lastPromptedAt) : 0
+      };
+      if (rs.dismissed !== repairedReview.dismissed || rs.completed !== repairedReview.completed || rs.lastPromptedAt !== repairedReview.lastPromptedAt) {
+        updates.reviewState = repairedReview;
+        needsRepair = true;
+      }
+    }
+  }
+
+  // 7. Installed timestamp verification (if key is present in data)
+  if (data && data.installedAt !== undefined) {
+    if (typeof data.installedAt !== "number" || !Number.isFinite(data.installedAt) || data.installedAt <= 0) {
+      updates.installedAt = Date.now();
+      needsRepair = true;
+    }
+  }
+
   return { updates, needsRepair };
 }
 
@@ -164,7 +192,7 @@ function ensureStorageIntegrity(callback) {
     return;
   }
 
-  chrome.storage.local.get(["shields", "stats", "whitelistedDomains", "customPiiPatterns", "auditLog"], (data) => {
+  chrome.storage.local.get(["shields", "stats", "whitelistedDomains", "customPiiPatterns", "auditLog", "installedAt", "reviewState"], (data) => {
     if (chrome.runtime.lastError) {
       if (callback) callback();
       return;
@@ -194,6 +222,18 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onInstalle
   chrome.runtime.onInstalled.addListener(() => {
     setupContextMenus();
     reconcileOrphanedTabs();
+    chrome.storage.local.get(["installedAt", "reviewState"], (data) => {
+      const updates = {};
+      if (!data || typeof data.installedAt !== "number" || data.installedAt <= 0) {
+        updates.installedAt = Date.now();
+      }
+      if (!data || !data.reviewState || typeof data.reviewState !== "object" || Array.isArray(data.reviewState)) {
+        updates.reviewState = { dismissed: false, completed: false, lastPromptedAt: 0 };
+      }
+      if (Object.keys(updates).length > 0) {
+        chrome.storage.local.set(updates);
+      }
+    });
     ensureStorageIntegrity(() => {
       console.log("[OSN Guard] Service worker initialized and storage integrity verified.");
     });

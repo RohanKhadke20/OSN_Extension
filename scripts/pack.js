@@ -29,6 +29,10 @@ const EXCLUDED_PATTERNS = [
   "node_modules",
   ".git",
   ".github",
+  ".agents",
+  ".gemini",
+  ".vscode",
+  ".idea",
   "docs",
   "tests",
   "scripts",
@@ -36,7 +40,10 @@ const EXCLUDED_PATTERNS = [
   "test-page.html",
   ".gitignore",
   "package.json",
-  "package-lock.json"
+  "package-lock.json",
+  ".DS_Store",
+  "Thumbs.db",
+  "ehthumbs.db"
 ];
 
 /**

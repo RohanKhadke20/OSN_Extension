@@ -47,6 +47,31 @@ const EXCLUDED_PATTERNS = [
   "ehthumbs.db"
 ];
 
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let value = i;
+    for (let j = 0; j < 8; j += 1) {
+      value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+    }
+    table[i] = value >>> 0;
+  }
+  return table;
+})();
+
+function crc32(data) {
+  if (typeof zlib.crc32 === "function") {
+    return zlib.crc32(data) >>> 0;
+  }
+
+  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data || "", "utf8");
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 /**
  * Encodes a Date object into standard MS-DOS 16-bit time and date values.
  * @param {Date} date
@@ -77,7 +102,7 @@ function buildZipBuffer(files) {
     const nameBuf = Buffer.from(normalizedName, "utf8");
     const content = Buffer.isBuffer(file.data) ? file.data : Buffer.from(file.data || "", "utf8");
     const uncompressedSize = content.length;
-    const crc = zlib.crc32(content);
+    const crc = crc32(content);
 
     // Compress using raw Deflate (no zlib wrapper)
     const compressed = zlib.deflateRawSync(content, { level: 9 });

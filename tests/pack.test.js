@@ -47,6 +47,7 @@ describe("Distribution Packager (scripts/pack.js)", () => {
 
       // Verify Local File Header signature (PK\x03\x04 = 0x04034b50)
       assert.equal(zipBuf.readUInt32LE(0), 0x04034b50);
+      assert.equal(zipBuf.readUInt32LE(14), 0xd7796aa0);
 
       // Verify EOCD signature (PK\x05\x06 = 0x06054b50) at the end
       const eocdOffset = zipBuf.length - 22;

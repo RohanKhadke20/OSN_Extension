@@ -9,9 +9,9 @@
  */
 
 const { performance } = require("node:perf_hooks");
-const urlAnalyzer = require("../core/url-analyzer.js");
-const piiAnalyzer = require("../core/pii-analyzer.js");
-const scamAnalyzer = require("../core/scam-analyzer.js");
+const urlAnalyzer = require("../src/core/url-analyzer.js");
+const piiAnalyzer = require("../src/core/pii-analyzer.js");
+const scamAnalyzer = require("../src/core/scam-analyzer.js");
 
 function runBenchmark(name, fn, iterations = 5000) {
   // Warm-up run

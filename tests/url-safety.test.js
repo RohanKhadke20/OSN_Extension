@@ -10,7 +10,7 @@ const {
   SHORTENER_DOMAINS,
   DANGEROUS_FILE_EXTENSIONS,
   HIGH_RISK_EXECUTABLE_EXTS
-} = require("../core/url-analyzer.js");
+} = require("../src/core/url-analyzer.js");
 
 describe("URL Safety Analyzer", () => {
   it("recognizes safe domains and their subdomains", () => {

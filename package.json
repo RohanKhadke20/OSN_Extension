@@ -4,7 +4,7 @@
   "description": "OSN Guard - Safety & Privacy Shield for Social Networks",
   "private": true,
   "scripts": {
-    "check": "node --check background.js content.js core/*.js options/*.js popup/*.js scripts/*.js tests/*.test.js tests/e2e/*.js",
+    "check": "node --check src/background/service-worker.js src/content/scanner.js src/core/compat.js src/core/threat-config.js src/core/url-analyzer.js src/core/pii-analyzer.js src/core/scam-analyzer.js src/ui/options/options.js src/ui/popup/popup.js scripts/pack.js scripts/bench.js tests/bench.test.js tests/compat.test.js tests/dashboard-score.test.js tests/pack.test.js tests/pii-detector.test.js tests/review-prompt.test.js tests/scam-detector.test.js tests/storage-sync.test.js tests/threat-config.test.js tests/url-safety.test.js tests/e2e/cdp-client.js tests/e2e/extension-lifecycle.test.js",
     "pack": "node scripts/pack.js",
     "pack:chrome": "node scripts/pack.js --target=chrome",
     "pack:firefox": "node scripts/pack.js --target=firefox",

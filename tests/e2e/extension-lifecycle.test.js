@@ -62,7 +62,7 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
 
   it("renders options page (options.html) with intact controls and backup utilities", async () => {
     assert.ok(extensionId);
-    const optionsUrl = `chrome-extension://${extensionId}/options/options.html`;
+    const optionsUrl = `chrome-extension://${extensionId}/src/ui/options/options.html`;
     const page = await browser.openPage(optionsUrl);
 
     await page.waitForFunction(() => document.title && document.title.includes("OSN Guard"));
@@ -126,7 +126,7 @@ describe("E2E Headless Extension Lifecycle & UI Test Suite", () => {
 
   it("renders popup page (popup.html) with score gauge and shield status cards", async () => {
     assert.ok(extensionId);
-    const popupUrl = `chrome-extension://${extensionId}/popup/popup.html`;
+    const popupUrl = `chrome-extension://${extensionId}/src/ui/popup/popup.html`;
     const page = await browser.openPage(popupUrl);
 
     await page.waitForFunction(() => document.title && document.title.includes("OSN Guard"));

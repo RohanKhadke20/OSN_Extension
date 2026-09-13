@@ -1,8 +1,8 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { isDomainWhitelisted, isSafeDomain } = require("../core/url-analyzer.js");
-const { detectPii, isSafeRegexPattern } = require("../core/pii-analyzer.js");
-const { sanitizeAndRepairStorage, mergeManagedSettings } = require("../background.js");
+const { isDomainWhitelisted, isSafeDomain } = require("../src/core/url-analyzer.js");
+const { detectPii, isSafeRegexPattern } = require("../src/core/pii-analyzer.js");
+const { sanitizeAndRepairStorage, mergeManagedSettings } = require("../src/background/service-worker.js");
 
 describe("Storage & Integration Helpers", () => {
   describe("Domain Whitelist Matching Logic", () => {

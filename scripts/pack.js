@@ -15,14 +15,8 @@ const zlib = require("node:zlib");
 const INCLUDED_PATTERNS = [
   "manifest.json",
   "managed_schema.json",
-  "background.js",
-  "content.js",
-  "content.css",
   "README.md",
-  "core",
-  "popup",
-  "options",
-  "assets"
+  "src"
 ];
 
 // Explicit exclusions
@@ -223,11 +217,12 @@ function buildTargetManifest(baseManifest, target = "chrome") {
     // 1. Convert service_worker to event page scripts array with strict dependency load order
     manifest.background = {
       scripts: [
-        "core/compat.js",
-        "core/url-analyzer.js",
-        "core/pii-analyzer.js",
-        "core/scam-analyzer.js",
-        "background.js"
+        "src/core/compat.js",
+        "src/core/threat-config.js",
+        "src/core/url-analyzer.js",
+        "src/core/pii-analyzer.js",
+        "src/core/scam-analyzer.js",
+        "src/background/service-worker.js"
       ]
     };
 

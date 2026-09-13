@@ -204,13 +204,13 @@ class HeadlessBrowser {
   async getExtensionId() {
     const targets = await this.getTargets();
     for (const target of targets) {
-      if ((target.url || "").includes("background.js") || (target.title || "").includes("OSN Guard")) {
+      if ((target.url || "").includes("src/background/service-worker.js") || (target.url || "").includes("service-worker.js") || (target.title || "").includes("OSN Guard")) {
         const match = (target.url || "").match(/chrome-extension:\/\/([a-z0-9]+)\//);
         if (match) return match[1];
       }
     }
     for (const target of targets) {
-      if (target.type === "service_worker" && !(target.url || "").includes("nkeimhogjdpnpccoofpliimaahmaaome")) {
+      if (target.type === "service_worker" && (target.url || "").includes("service-worker")) {
         const match = (target.url || "").match(/chrome-extension:\/\/([a-z0-9]+)\//);
         if (match) return match[1];
       }

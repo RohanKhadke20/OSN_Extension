@@ -76,15 +76,15 @@ describe("Distribution Packager (scripts/pack.js)", () => {
       // Must include production extension files
       assert.ok(relativePaths.includes("manifest.json"), "manifest.json missing");
       assert.ok(relativePaths.includes("managed_schema.json"), "managed_schema.json missing");
-      assert.ok(relativePaths.includes("background.js"), "background.js missing");
-      assert.ok(relativePaths.includes("content.js"), "content.js missing");
-      assert.ok(relativePaths.includes("content.css"), "content.css missing");
-      assert.ok(relativePaths.includes("core/url-analyzer.js"), "url-analyzer.js missing");
-      assert.ok(relativePaths.includes("core/pii-analyzer.js"), "pii-analyzer.js missing");
-      assert.ok(relativePaths.includes("core/scam-analyzer.js"), "scam-analyzer.js missing");
-      assert.ok(relativePaths.includes("popup/popup.html"), "popup.html missing");
-      assert.ok(relativePaths.includes("options/options.html"), "options.html missing");
-      assert.ok(relativePaths.includes("assets/icons/icon-128.png"), "icon-128.png missing");
+      assert.ok(relativePaths.includes("src/background/service-worker.js"), "service-worker.js missing");
+      assert.ok(relativePaths.includes("src/content/scanner.js"), "scanner.js missing");
+      assert.ok(relativePaths.includes("src/content/scanner.css"), "scanner.css missing");
+      assert.ok(relativePaths.includes("src/core/url-analyzer.js"), "url-analyzer.js missing");
+      assert.ok(relativePaths.includes("src/core/pii-analyzer.js"), "pii-analyzer.js missing");
+      assert.ok(relativePaths.includes("src/core/scam-analyzer.js"), "scam-analyzer.js missing");
+      assert.ok(relativePaths.includes("src/ui/popup/popup.html"), "popup.html missing");
+      assert.ok(relativePaths.includes("src/ui/options/options.html"), "options.html missing");
+      assert.ok(relativePaths.includes("src/assets/icons/icon-128.png"), "icon-128.png missing");
 
       // Must strictly exclude non-production files
       assert.ok(!relativePaths.some(p => p.startsWith("tests/")), "tests/ was not excluded");
@@ -125,30 +125,31 @@ describe("Distribution Packager (scripts/pack.js)", () => {
         manifest_version: 3,
         name: "OSN Guard - Test",
         version: "1.3.0",
-        background: { service_worker: "background.js" }
+        background: { service_worker: "src/background/service-worker.js" }
       };
 
       // Chrome target retains service_worker
       const chromeManifest = buildTargetManifest(baseManifest, "chrome");
-      assert.equal(chromeManifest.background.service_worker, "background.js");
+      assert.equal(chromeManifest.background.service_worker, "src/background/service-worker.js");
       assert.equal(chromeManifest.browser_specific_settings, undefined);
 
       // Firefox target converts to event page scripts array with load order
       const firefoxManifest = buildTargetManifest(baseManifest, "firefox");
       assert.equal(firefoxManifest.background.service_worker, undefined);
       assert.deepEqual(firefoxManifest.background.scripts, [
-        "core/compat.js",
-        "core/url-analyzer.js",
-        "core/pii-analyzer.js",
-        "core/scam-analyzer.js",
-        "background.js"
+        "src/core/compat.js",
+        "src/core/threat-config.js",
+        "src/core/url-analyzer.js",
+        "src/core/pii-analyzer.js",
+        "src/core/scam-analyzer.js",
+        "src/background/service-worker.js"
       ]);
       assert.notEqual(firefoxManifest.browser_specific_settings?.gecko?.id, undefined);
       assert.equal(firefoxManifest.browser_specific_settings.gecko.strict_min_version, "109.0");
 
       // Safari target retains service_worker and adds safari settings
       const safariManifest = buildTargetManifest(baseManifest, "safari");
-      assert.equal(safariManifest.background.service_worker, "background.js");
+      assert.equal(safariManifest.background.service_worker, "src/background/service-worker.js");
       assert.equal(safariManifest.browser_specific_settings.safari.strict_min_version, "15.4");
     });
 

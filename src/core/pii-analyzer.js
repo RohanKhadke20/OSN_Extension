@@ -6,12 +6,43 @@
 
 (function (root, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory();
+    const defaultInstance = factory();
+    module.exports = defaultInstance;
+    module.exports.create = factory;
   } else {
-    root.OSNPiiAnalyzer = factory();
+    const defaultInstance = factory();
+    root.OSNPiiAnalyzer = defaultInstance;
+    root.OSNPiiAnalyzer.create = factory;
   }
-})(typeof self !== "undefined" ? self : this, function () {
+})(typeof self !== "undefined" ? self : this, function (userConfig) {
   "use strict";
+
+  // Resolve threat config thresholds: prefer userConfig.pii.thresholds, then OSNThreatConfig global / require fallback, then defaults
+  let _threatConfigModule = null;
+  if (typeof OSNThreatConfig !== "undefined") {
+    _threatConfigModule = OSNThreatConfig;
+  } else if (typeof require === "function") {
+    try {
+      _threatConfigModule = require("./threat-config");
+    } catch (_) {}
+  }
+
+  const _defaults = (_threatConfigModule && _threatConfigModule.DEFAULT_THREAT_CONFIG)
+    ? _threatConfigModule.DEFAULT_THREAT_CONFIG.pii
+    : null;
+
+  const _uc = (userConfig && typeof userConfig === "object" && userConfig.pii)
+    ? userConfig.pii
+    : {};
+
+  function _threshold(key, fallback) {
+    const t = _uc.thresholds;
+    if (t && typeof t[key] === "number") return t[key];
+    if (_defaults && _defaults.thresholds && typeof _defaults.thresholds[key] === "number") {
+      return _defaults.thresholds[key];
+    }
+    return fallback;
+  }
 
   /**
    * Validates a numeric string against the Luhn algorithm (Mod 10)
@@ -190,7 +221,7 @@
   ];
 
   // Maximum number of cached custom regular expressions to bound memory usage
-  const MAX_CUSTOM_REGEX_CACHE_SIZE = 100;
+  const MAX_CUSTOM_REGEX_CACHE_SIZE = _threshold("lruCacheSize", 100);
   const customRegexCache = new Map();
 
   /**
@@ -298,7 +329,7 @@
    * @returns {Array<{type: string, name: string, severity: "warning" | "critical", match: string}>}
    */
   function detectPii(text, customPatterns = []) {
-    if (!text || typeof text !== "string" || text.trim().length < 5) {
+    if (!text || typeof text !== "string" || text.trim().length < _threshold("minTextLength", 5)) {
       return [];
     }
 

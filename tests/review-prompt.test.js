@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { isReviewPromptEligible } = require("../popup/popup.js");
+const { isReviewPromptEligible } = require("../src/ui/popup/popup.js");
 
 describe("Ethical Review Prompt Eligibility (popup/popup.js)", () => {
   const NOW = 1750000000000;

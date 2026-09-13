@@ -12,41 +12,42 @@
     "managed_schema": "managed_schema.json"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background/service-worker.js"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": [
-        "core/compat.js",
-        "core/url-analyzer.js",
-        "core/pii-analyzer.js",
-        "core/scam-analyzer.js",
-        "content.js"
+        "src/core/compat.js",
+        "src/core/threat-config.js",
+        "src/core/url-analyzer.js",
+        "src/core/pii-analyzer.js",
+        "src/core/scam-analyzer.js",
+        "src/content/scanner.js"
       ],
-      "css": ["content.css"],
+      "css": ["src/content/scanner.css"],
       "run_at": "document_end"
     }
   ],
   "icons": {
-    "16": "assets/icons/icon-16.png",
-    "48": "assets/icons/icon-48.png",
-    "128": "assets/icons/icon-128.png"
+    "16": "src/assets/icons/icon-16.png",
+    "48": "src/assets/icons/icon-48.png",
+    "128": "src/assets/icons/icon-128.png"
   },
   "action": {
-    "default_popup": "popup/popup.html",
+    "default_popup": "src/ui/popup/popup.html",
     "default_title": "OSN Guard",
     "default_icon": {
-      "16": "assets/icons/icon-16.png",
-      "48": "assets/icons/icon-48.png",
-      "128": "assets/icons/icon-128.png"
+      "16": "src/assets/icons/icon-16.png",
+      "48": "src/assets/icons/icon-48.png",
+      "128": "src/assets/icons/icon-128.png"
     }
   },
   "content_security_policy": {
     "extension_pages": "default-src 'self'; connect-src 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
   },
   "options_ui": {
-    "page": "options/options.html",
+    "page": "src/ui/options/options.html",
     "open_in_tab": true
   }
 }

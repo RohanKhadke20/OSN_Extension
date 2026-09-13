@@ -6,108 +6,95 @@
 
 (function (root, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory();
+    // Export factory for config injection in tests; call with no args for default instance
+    const defaultInstance = factory();
+    module.exports = defaultInstance;
+    module.exports.create = factory;
   } else {
-    root.OSNUrlAnalyzer = factory();
+    const defaultInstance = factory();
+    root.OSNUrlAnalyzer = defaultInstance;
+    root.OSNUrlAnalyzer.create = factory;
   }
-})(typeof self !== "undefined" ? self : this, function () {
+})(typeof self !== "undefined" ? self : this, function (userConfig) {
   "use strict";
 
-  // Comprehensive list of well-known trusted domains and major OSNs
-  const SAFE_DOMAINS = new Set([
-    "facebook.com",
-    "twitter.com",
-    "x.com",
-    "linkedin.com",
-    "reddit.com",
-    "instagram.com",
-    "threads.net",
-    "youtube.com",
-    "tiktok.com",
-    "pinterest.com",
-    "tumblr.com",
-    "snapchat.com",
-    "discord.com",
-    "telegram.org",
-    "whatsapp.com",
-    "medium.com",
-    "quora.com",
-    "github.com",
-    "gitlab.com",
-    "bitbucket.org",
-    "stackoverflow.com",
-    "stackexchange.com",
-    "google.com",
-    "microsoft.com",
-    "apple.com",
-    "amazon.com",
-    "wikipedia.org",
-    "wikimedia.org",
-    "w3.org",
-    "mozilla.org",
-    "cloudflare.com",
-    "npmjs.com",
-    "yahoo.com",
-    "duckduckgo.com",
-    "bing.com",
-    "spotify.com",
-    "netflix.com",
-    "twitch.tv",
-    "vimeo.com"
+  // Resolve threat config: prefer userConfig.url overrides, else fall back to
+  // OSNThreatConfig defaults (browser global or require fallback) or hard-coded inline defaults.
+  let _threatConfigModule = null;
+  if (typeof OSNThreatConfig !== "undefined") {
+    _threatConfigModule = OSNThreatConfig;
+  } else if (typeof require === "function") {
+    try {
+      _threatConfigModule = require("./threat-config");
+    } catch (_) {}
+  }
+
+  const _defaults = (_threatConfigModule && _threatConfigModule.DEFAULT_THREAT_CONFIG)
+    ? _threatConfigModule.DEFAULT_THREAT_CONFIG.url
+    : null;
+
+  const _uc = (userConfig && typeof userConfig === "object" && userConfig.url)
+    ? userConfig.url
+    : {};
+
+  function _arr(key, fallback) {
+    return Array.isArray(_uc[key]) ? _uc[key]
+      : (_defaults && Array.isArray(_defaults[key]) ? _defaults[key] : fallback);
+  }
+
+  function _threshold(key, fallback) {
+    const t = _uc.thresholds;
+    if (t && typeof t[key] === "number") return t[key];
+    if (_defaults && _defaults.thresholds && typeof _defaults.thresholds[key] === "number") {
+      return _defaults.thresholds[key];
+    }
+    return fallback;
+  }
+
+  // Domain / keyword data (sourced from config, arrays converted to Sets)
+  const SAFE_DOMAINS = new Set(_arr("safeDomains", [
+    "facebook.com", "twitter.com", "x.com", "linkedin.com", "reddit.com",
+    "instagram.com", "threads.net", "youtube.com", "tiktok.com",
+    "pinterest.com", "tumblr.com", "snapchat.com", "discord.com",
+    "telegram.org", "whatsapp.com", "medium.com", "quora.com",
+    "github.com", "gitlab.com", "bitbucket.org", "stackoverflow.com",
+    "stackexchange.com", "google.com", "microsoft.com", "apple.com",
+    "amazon.com", "wikipedia.org", "wikimedia.org", "w3.org",
+    "mozilla.org", "cloudflare.com", "npmjs.com", "yahoo.com",
+    "duckduckgo.com", "bing.com", "spotify.com", "netflix.com",
+    "twitch.tv", "vimeo.com"
+  ]));
+
+  const SUSPICIOUS_DOMAINS = _arr("suspiciousDomains", [
+    "login-verify-facebook.com", "security-alert-twitter.net",
+    "linkedin-verify.info", "reddit-coins-free.org",
+    "pay-paypal-verify.com", "free-crypto-giveaway.cc",
+    "win-iphone-now.xyz", "update-banking-security.co",
+    "metamask-wallet-recovery.com", "binance-airdrop-claim.com",
+    "steam-community-nitro.ru", "discord-free-nitro.xyz"
   ]);
 
-  // Known malicious, phishing, or scam test domains
-  const SUSPICIOUS_DOMAINS = [
-    "login-verify-facebook.com",
-    "security-alert-twitter.net",
-    "linkedin-verify.info",
-    "reddit-coins-free.org",
-    "pay-paypal-verify.com",
-    "free-crypto-giveaway.cc",
-    "win-iphone-now.xyz",
-    "update-banking-security.co",
-    "metamask-wallet-recovery.com",
-    "binance-airdrop-claim.com",
-    "steam-community-nitro.ru",
-    "discord-free-nitro.xyz"
-  ];
-
   // Suspicious low-cost / high-abuse TLDs often used for disposable phishing
-  const SUSPICIOUS_TLDS = new Set([
+  const SUSPICIOUS_TLDS = new Set(_arr("suspiciousTlds", [
     ".xyz", ".cc", ".info", ".click", ".top", ".buzz",
     ".work", ".gq", ".tk", ".cf", ".ml", ".ga",
     ".rest", ".country", ".stream", ".cam", ".monster",
     ".sbs", ".cfd", ".quest", ".beauty", ".hair", ".skin"
-  ]);
+  ]));
 
   // High-risk keywords commonly combined in phishing URLs
-  const PHISHING_KEYWORDS = [
+  const PHISHING_KEYWORDS = _arr("phishingKeywords", [
     "login", "verify", "secure", "signin", "account",
     "update", "banking", "free-coins", "giveaway", "claim",
     "airdrop", "wallet-connect", "password-reset", "recover", "billing"
-  ];
+  ]);
 
   // Known URL shortening services frequently abused to conceal phishing/scam destinations
-  const SHORTENER_DOMAINS = new Set([
-    "bit.ly",
-    "tinyurl.com",
-    "is.gd",
-    "v.gd",
-    "buff.ly",
-    "ow.ly",
-    "rb.gy",
-    "cutt.ly",
-    "shorturl.at",
-    "rebrand.ly",
-    "tiny.cc",
-    "bc.vc",
-    "t.ly",
-    "soo.gd",
-    "clck.ru",
-    "rotf.lol",
-    "s.id",
-    "shorte.st"
-  ]);
+  const SHORTENER_DOMAINS = new Set(_arr("urlShorteners", [
+    "bit.ly", "tinyurl.com", "is.gd", "v.gd", "buff.ly", "ow.ly",
+    "rb.gy", "cutt.ly", "shorturl.at", "rebrand.ly", "tiny.cc",
+    "bc.vc", "t.ly", "soo.gd", "clck.ru", "rotf.lol", "s.id", "shorte.st"
+  ]));
 
   // IP address regex patterns (IPv4, IPv6, octal/hex dotted, and dword representations)
   const IPV4_PATTERN = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
@@ -121,27 +108,32 @@
   const LATIN_PATTERN = /[a-zA-Z]/;
 
   // Dangerous URI schemes that can carry obfuscated scripts, file system exploits, or payload data
-  const DANGEROUS_SCHEMES = new Set(["data:", "blob:", "file:", "filesystem:"]);
+  const DANGEROUS_SCHEMES = new Set(_arr("dangerousSchemes", ["data:", "blob:", "file:", "filesystem:"]));
 
   // Dangerous executable, script, and installer file extensions frequently abused for drive-by malware downloads
-  const DANGEROUS_FILE_EXTENSIONS = new Set([
+  const DANGEROUS_FILE_EXTENSIONS = new Set(_arr("dangerousExtensions", [
     ".exe", ".scr", ".bat", ".cmd", ".vbs", ".vbe",
     ".ps1", ".msi", ".hta", ".apk", ".iso", ".jar",
     ".wsf", ".cpl", ".reg"
-  ]);
+  ]));
 
   // High-risk script droppers and screensaver binaries that warrant critical security alerts
-  const HIGH_RISK_EXECUTABLE_EXTS = new Set([
+  const HIGH_RISK_EXECUTABLE_EXTS = new Set(_arr("highRiskExtensions", [
     ".scr", ".hta", ".vbs", ".vbe", ".bat", ".cmd",
     ".ps1", ".wsf", ".cpl", ".reg"
-  ]);
+  ]));
 
   // Open redirect query parameter names commonly used across platforms
-  const REDIRECT_PARAM_NAMES = new Set([
+  const REDIRECT_PARAM_NAMES = new Set(_arr("openRedirectParams", [
     "redirect", "redirect_url", "redirect_to", "return_to", "return",
     "url", "dest", "destination", "next", "link", "target", "goto",
     "out", "forward", "redir", "r", "u"
-  ]);
+  ]));
+
+  // Thresholds (sourced from config)
+  const MIN_PHISHING_KW = _threshold("minPhishingKeywordMatches", 2);
+  const MAX_SUBDOMAIN_DEPTH = _threshold("maxSubdomainDepth", 5);
+  const MAX_REDIRECT_DEPTH = _threshold("maxRedirectDepth", 2);
 
   /**
    * Identifies dangerous executable or script file extensions in a URL path or query parameters
@@ -424,7 +416,7 @@
 
         if (!isInternalRedirect) {
           // Recursively inspect destination safety if within recursion limit
-          if (_depth < 2) {
+          if (_depth < MAX_REDIRECT_DEPTH) {
             const destResult = analyzeUrlSafety(targetUrl.href, whitelistedDomains, _depth + 1);
             if (!destResult.safe) {
               return {
@@ -513,13 +505,13 @@
     // Heuristic E: Phishing keyword combinations in subdomain / path
     const urlLower = urlString.toLowerCase();
     const matchedKeywords = PHISHING_KEYWORDS.filter(kw => urlLower.includes(kw));
-    if (matchedKeywords.length >= 2) {
+    if (matchedKeywords.length >= MIN_PHISHING_KW) {
       heuristics.push(`Contains multiple phishing keywords: ${matchedKeywords.join(", ")}`);
     }
 
     // Heuristic F: Excessive subdomain nesting (e.g. login.secure.bank.evil.com)
     const hostParts = domain.split(".");
-    if (hostParts.length >= 5 && !isRawIpAddress(domain)) {
+    if (hostParts.length >= MAX_SUBDOMAIN_DEPTH && !isRawIpAddress(domain)) {
       heuristics.push("Excessive subdomain nesting often used to disguise brand names");
     }
 

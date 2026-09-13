@@ -1,6 +1,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { detectScamContent, buildAhoCorasick, searchAhoCorasick } = require("../core/scam-analyzer.js");
+const { detectScamContent, buildAhoCorasick, searchAhoCorasick } = require("../src/core/scam-analyzer.js");
 
 describe("Scam & Fraud Content Detector", () => {
   it("detects cryptocurrency giveaway and doubling scams", () => {

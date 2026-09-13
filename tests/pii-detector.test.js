@@ -10,7 +10,7 @@ const {
   clearCustomRegexCache,
   getCustomRegexCacheSize,
   isSafeRegexPattern
-} = require("../core/pii-analyzer.js");
+} = require("../src/core/pii-analyzer.js");
 
 describe("PII Leak Detector", () => {
   describe("Luhn algorithm check", () => {

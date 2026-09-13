@@ -15,7 +15,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 // Target path for production shim; fallback to explorer proposed artifact during staged authoring
-const CORE_COMPAT_PATH = path.resolve(__dirname, "../core/compat.js");
+const CORE_COMPAT_PATH = path.resolve(__dirname, "../src/core/compat.js");
 const EXPLORER_COMPAT_PATH = path.resolve(__dirname, "../.agents/m1_explorer_1/proposed_compat.js");
 
 const COMPAT_PATH = fs.existsSync(CORE_COMPAT_PATH)

@@ -88,7 +88,8 @@ Engineered for zero page lag:
 | `storage` | Stores user configuration (shield toggles, whitelisted domains, custom PII rules, and aggregate counters). | Strictly local storage (`chrome.storage.local` and `chrome.storage.session`). Never synced to external servers or third parties. |
 | `activeTab` | Enables on-demand security inspection when the user clicks the toolbar icon or triggers a context menu scan. | Grants temporary access exclusively to the single tab the user is actively interacting with. |
 | `contextMenus` | Provides quick right-click actions: *"Scan link with OSN Guard"* and *"Analyze selection for scams & PII"*. | Only processes selected text or link URLs when explicitly invoked by user action. |
-| `host_permissions` | Minimal declarative content scripts on web navigation (`http://*/*`, `https://*/*`). | Excludes internal browser schemes (`chrome://`, `edge://`, `about:`). Enforces strict `connect-src 'none'` CSP. |
+
+*Note: `host_permissions: none` (0 host permissions requested). OSN Guard requires zero broad host access.*
 
 ---
 
@@ -145,7 +146,7 @@ Engineered for zero page lag:
 
 1. **Screenshot 1 — Main Dashboard (popup.html)**
    - *Caption:* Intuitive real-time security dashboard with live security score and toggleable shields.
-2. **Screenshot 2 — In-Page Composer Interception (content.js)**
+2. **Screenshot 2 — In-Page Composer Interception (src/content/scanner.js)**
    - *Caption:* Intercepts accidental credit cards, IBANs, and API tokens directly inside social media inputs.
 3. **Screenshot 3 — Punycode & Homoglyph Detection**
    - *Caption:* Exposes deceptive Cyrillic/Greek lookalike domains before you click.

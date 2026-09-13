@@ -180,8 +180,8 @@ Inspects input text for Personally Identifiable Information (PII) and secret cre
   Validates US Social Security Numbers, checking against invalid area codes (`000`, `666`, `900–999`) and group codes.
 - `isValidIBAN(ibanStr: string): boolean`  
   Validates International Bank Account Numbers via ISO 7064 Mod-97 checksum.
-- `isSafeRegexPattern(patternStr: string): { safe: boolean, error?: string }`  
-  Static analyzer rejecting catastrophic backtracking patterns, excessive lengths (> 150 chars), and nested quantifiers.
+- `isSafeRegexPattern(patternStr: string): boolean`  
+  Static analyzer rejecting catastrophic backtracking patterns, excessive lengths (> 250 chars), and nested quantifiers.
 - `getCompiledCustomRegex(patternStr: string): RegExp | null`  
   Retrieves or compiles validated regex from the LRU cache (capped at 100 entries).
 - `clearCustomRegexCache(): void`  
@@ -263,7 +263,7 @@ To maintain 60 FPS scrolling on heavy feeds, DOM scanning runs cooperatively:
 ### 4.2 Composer PII Interception
 
 - Listens for `input` and `paste` events across `textarea`, `input[type="text"]`, `input[type="search"]`, and `[contenteditable="true"]`.
-- Clamps input text to `50,000` characters.
+- Processes input directly via debounced frame-budgeted tasks (300ms for typing, 50ms for paste).
 - Evaluates `detectPii()`; if sensitive data is detected, renders a floating warning banner adjacent to the composer displaying the detected PII type, severity badge, and a one-click "Mask & Redact" button.
 
 ---

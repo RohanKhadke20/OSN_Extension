@@ -1,5 +1,7 @@
 # OSN Guard - Master Implementation Plan & Production Readiness Roadmap
 
+> **Archival Notice:** Historical implementation record for Phases 1–10 prior to the v1.3.0 src/ modular reorganization.
+
 **Document ID:** OSN-PLAN-001  
 **Target Version:** `1.3.0`  
 **Status:** READY_FOR_EXECUTION  

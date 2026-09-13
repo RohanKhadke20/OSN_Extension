@@ -1,6 +1,6 @@
 # OSN Guard — System Threat Model & Security Architecture
 
-**Document Version:** 1.0.0  
+**Document Version:** 1.3.0  
 **Classification:** Public Security Specification  
 **Extension Target:** Google Chrome, Mozilla Firefox, Apple Safari (Manifest V3)  
 **Last Updated:** September 2026
@@ -22,30 +22,30 @@ This document formalizes the threat landscape, trust boundaries, protected asset
 The extension architecture consists of four distinct execution environments managed under the browser extension sandbox:
 
 ```
-+-------------------------------------------------------------------------+
-|                              HOST DEVICE                                |
-|                                                                         |
-|  +-------------------------------------------------------------------+  |
-|  |                        BROWSER PROCESS                            |  |
-|  |                                                                   |  |
-|  |  +-----------------------+           +--------------------------+ |  |
-|  |  |  Untrusted Web Page   |           |  Background Context      | |  |
-|  |  |  (DOM, Inputs, Links) |           |  (Service Worker /       | |  |
-|  |  |           |           |           |   Gecko Event Page)      | |  |
-|  |  |           v           |           |             ^            | |  |
-|  |  |  +-----------------+  |  IPC      |             |            | |  |
-|  |  |  | Content Script  |--|-----------|-------------+            | |  |
-|  |  |  | (content.js)    |  | (chrome.  |             v            | |  |
-|  |  |  +-----------------+  |  runtime) |  +--------------------+  | |  |
-|  |  +-----------------------+           |  | Local Storage      |  | |  |
-|  |                                      |  | (chrome.storage)   |  | |  |
-|  |  +-----------------------+           |  +--------------------+  | |  |
-|  |  | Extension UI Pages    |           |             ^            | |  |
-|  |  | (Popup & Options)     |-----------|-------------+            | |  |
-|  |  +-----------------------+           +--------------------------+ |  |
-|  |                                                                   |  |
-|  +-------------------------------------------------------------------+  |
-+-------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------+
+|                                    HOST DEVICE                                    |
+|                                                                                   |
+|  +-----------------------------------------------------------------------------+  |
+|  |                              BROWSER PROCESS                                |  |
+|  |                                                                             |  |
+|  |  +-------------------------------+           +----------------------------+ |  |
+|  |  |  Untrusted Web Page           |           |  Background Context        | |  |
+|  |  |  (DOM, Inputs, Links)         |           |  (Service Worker /         | |  |
+|  |  |           |                   |           |   Gecko Event Page)        | |  |
+|  |  |           v                   |           |             ^              | |  |
+|  |  |  +-------------------------+  |  IPC      |             |              | |  |
+|  |  |  | Content Script          |--|-----------|-------------+              | |  |
+|  |  |  | (src/content/scanner.js)|  | (chrome.  |             v              | |  |
+|  |  |  +-------------------------+  |  runtime) |  +----------------------+  | |  |
+|  |  +-------------------------------+           |  | Local Storage        |  | |  |
+|  |                                              |  | (chrome.storage)     |  | |  |
+|  |  +-------------------------------+           |  +----------------------+  | |  |
+|  |  | Extension UI Pages            |           |             ^              | |  |
+|  |  | (Popup & Options)             |-----------|-------------+              | |  |
+|  |  +-------------------------------+           +----------------------------+ |  |
+|  |                                                                             |  |
+|  +-----------------------------------------------------------------------------+  |
++-----------------------------------------------------------------------------------+
 ```
 
 ### Trust Boundary Definitions

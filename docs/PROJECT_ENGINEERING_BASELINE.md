@@ -184,7 +184,7 @@ This enables dual-runtime execution:
 
 ### Finding CF-02: Uncapped DOM Query on Non-OSN Pages
 - **Severity:** P2 (Performance / Scalability)
-- **Location:** `content.js:345-375` (`getSocialTextContainers()`)
+- **Location:** `src/content/scanner.js` (`getSocialTextContainers()`)
 - **Description:** On non-supported platforms, the selector falls back to `"p, .feed-text"`. In massive DOM documents (e.g. Wikipedia, single-page documentation portals with 3,000+ paragraphs), `querySelectorAll` and subsequent text scanning can block the main thread.
 - **Remediation:** Introduce a maximum batch limit (e.g. max 50 unscanned containers per tick) and leverage `requestIdleCallback` to defer processing non-critical feed nodes.
 
@@ -224,7 +224,7 @@ This enables dual-runtime execution:
 ## 7. Testing Assessment
 
 ### Current Test Coverage
-- **Total Tests:** 63 automated tests across 14 test suites in `tests/*.test.js`.
+- **Total Tests:** 241 automated tests across 55 test suites in `tests/*.test.js`.
 - **Test Runner:** Node.js native test runner (`node:test`, `node:assert/strict`).
 - **Execution Speed:** ~350ms total execution time.
 - **Execution Command:** `npm test`.
@@ -246,7 +246,7 @@ This enables dual-runtime execution:
 
 ### Observed Metrics
 - `npm run check`: Validates 8 core JavaScript files in < 100ms.
-- `npm test`: Runs all 63 unit tests across 14 suites in < 400ms.
+- `npm test`: Runs all 241 automated tests across 55 suites in < 2000ms.
 - Real-time PII Input Debounce: 300ms for typing, 50ms for paste events.
 - Dynamic Mutation Observer: 800ms debounce to prevent reflow loops during fast scrolling.
 - Contenteditable Text Extraction: Switched from `innerText` to `textContent` to eliminate browser layout reflow triggers.
@@ -321,7 +321,7 @@ RohanKhadke20/OSN_Extension
 ├── options/
 ├── popup/
 ├── tests/
-│   ├── unit/                    # Existing 63 fast unit tests
+│   ├── unit/                    # 241 automated tests across 55 suites
 │   └── e2e/                     # Headless browser integration tests
 ├── scripts/
 │   └── pack.js                  # Automated web-store zip packager
@@ -345,8 +345,8 @@ RohanKhadke20/OSN_Extension
 - **Task 1.3**: Declare explicit Content Security Policy in `manifest.json`.
 
 ### PHASE 2 — Performance & Reliability Hardening
-- **Task 2.1**: Implement custom RegExp cache in `core/pii-analyzer.js` to eliminate redundant regex compilation during high-frequency typing.
-- **Task 2.2**: Add node batch limits (max 50 elements per scan cycle) in `content.js` to guard against main-thread jank on massive generic web pages.
+- **Task 2.1**: Implement custom RegExp cache in `src/core/pii-analyzer.js` to eliminate redundant regex compilation during high-frequency typing.
+- **Task 2.2**: Add node batch limits (max 50 elements per scan cycle) in `src/content/scanner.js` to guard against main-thread jank on massive generic web pages.
 
 ### PHASE 3 — Developer Experience & Packaging Automation
 - **Task 3.1**: Create Node-based packaging script (`scripts/pack.js`) to generate clean, distribution-ready extension `.zip` archives excluding tests and developer documentation.
@@ -364,7 +364,7 @@ RohanKhadke20/OSN_Extension
 3. **No Unbounded Regex Compilation**: Never compile regular expressions in tight loops; cache compiled patterns.
 4. **All Secret/PII Tests Must Use Synthetic Mock Strings**: Never commit strings that match real production token formats (to maintain 100% compliance with GitHub Secret Scanning).
 5. **Manifest V3 Conformance**: All background logic must be service-worker compliant and resilient to arbitrary termination.
-6. **No Regressions**: All 63 existing unit tests must remain green across all Node.js matrix versions (18, 20, 22).
+6. **No Regressions**: All 241 automated tests across 55 suites must remain green across all Node.js matrix versions (18, 20, 22).
 
 ---
 
@@ -377,7 +377,7 @@ A task or feature is considered **DONE** only when:
 - [x] Documentation is updated to reflect any API or configuration changes.
 - [x] Git diff is reviewed and confirmed to touch only relevant files.
 - [x] Commit message follows Conventional Commits format (`feat(...)`, `fix(...)`, `docs(...)`).
-- [x] Changes are pushed to GitHub `main` branch.
+- [x] Changes are pushed to dedicated audit/feature branch.
 
 ---
 
@@ -385,7 +385,7 @@ A task or feature is considered **DONE** only when:
 
 - [x] Core detection engines verified for PII, URL, and scam heuristics.
 - [x] MV3 service worker ephemeral lifecycle and session storage verified.
-- [x] Comprehensive unit test suite (63 tests) covering edge cases.
+- [x] Comprehensive unit test suite (241 automated tests across 55 suites) covering edge cases.
 - [x] CI matrix running on GitHub Actions across Linux and Windows.
 - [ ] Production icon assets created and linked in `manifest.json` (Pending Phase 1).
 - [ ] `.gitignore` configured (Pending Phase 1).

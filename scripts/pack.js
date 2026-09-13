@@ -11,6 +11,39 @@ const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
 
+const CRC32_TABLE = (() => {
+  if (typeof zlib.crc32 === "function") return null;
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let value = i;
+    for (let bit = 0; bit < 8; bit++) {
+      value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+    }
+    table[i] = value >>> 0;
+  }
+  return table;
+})();
+
+/**
+ * Computes a ZIP-compatible CRC-32 checksum.
+ * Uses native zlib.crc32 when available, with a fallback for Node 18/20.
+ * @param {Buffer} input
+ * @returns {number}
+ */
+function computeCrc32(input) {
+  if (typeof zlib.crc32 === "function") {
+    return zlib.crc32(input) >>> 0;
+  }
+
+  const bytes = Buffer.isBuffer(input) ? input : Buffer.from(input || "", "utf8");
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    const index = (crc ^ byte) & 0xff;
+    crc = (crc >>> 8) ^ CRC32_TABLE[index];
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 // Files and directories included in production build
 const INCLUDED_PATTERNS = [
   "manifest.json",
@@ -71,7 +104,7 @@ function buildZipBuffer(files) {
     const nameBuf = Buffer.from(normalizedName, "utf8");
     const content = Buffer.isBuffer(file.data) ? file.data : Buffer.from(file.data || "", "utf8");
     const uncompressedSize = content.length;
-    const crc = zlib.crc32(content);
+    const crc = computeCrc32(content);
 
     // Compress using raw Deflate (no zlib wrapper)
     const compressed = zlib.deflateRawSync(content, { level: 9 });

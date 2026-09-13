@@ -3,7 +3,6 @@ document.addEventListener("DOMContentLoaded", () => {
   "use strict";
 
   // Elements
-  const closeBtn = document.getElementById("close-options-btn");
   const saveSuccessAlert = document.getElementById("save-success");
   const saveErrorAlert = document.getElementById("save-error");
 
@@ -147,17 +146,20 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // Close Settings
-  closeBtn.addEventListener("click", () => {
-    try {
-      window.close();
-    } catch {
-      // Ignored if browser blocks window.close()
-    }
-    closeBtn.textContent = "Saved";
-    setTimeout(() => {
-      closeBtn.textContent = "Done";
-    }, 1500);
-  });
+  const closeBtn = document.getElementById("close-options-btn");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      try {
+        window.close();
+      } catch {
+        // Ignored if browser blocks window.close()
+      }
+      closeBtn.textContent = "Saved";
+      setTimeout(() => {
+        closeBtn.textContent = "Done";
+      }, 1500);
+    });
+  }
 
   // Load and Render Option lists
   const loadConfig = () => {

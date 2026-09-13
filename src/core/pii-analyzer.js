@@ -50,7 +50,7 @@
    * @returns {boolean}
    */
   function luhnCheck(numStr) {
-    if (!numStr || numStr.length < 2 || numStr.length > 30) {
+    if (!numStr || typeof numStr !== "string" || numStr.length < 2 || numStr.length > 30) {
       return false;
     }
 
@@ -84,6 +84,7 @@
    * @returns {boolean}
    */
   function isValidSSN(ssnStr) {
+    if (!ssnStr || typeof ssnStr !== "string") return false;
     const clean = ssnStr.replace(/\D/g, "");
     if (clean.length !== 9) return false;
 

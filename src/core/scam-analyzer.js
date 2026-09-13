@@ -70,11 +70,13 @@
    */
   function buildAhoCorasick(rules) {
     const root = { next: new Map(), fail: null, output: [] };
+    if (!Array.isArray(rules) || rules.length === 0) return root;
 
     // 1. Build Trie
     for (const rule of rules) {
-      if (!rule.keywords) continue;
+      if (!rule || !Array.isArray(rule.keywords)) continue;
       for (const kw of rule.keywords) {
+        if (!kw || typeof kw !== "string") continue;
         const lowerKw = kw.toLowerCase();
         let curr = root;
         for (let i = 0; i < lowerKw.length; i++) {
@@ -90,7 +92,7 @@
 
     // 2. Build Failure Links using BFS
     const queue = [];
-    for (const [ch, child] of root.next) {
+    for (const [, child] of root.next) {
       child.fail = root;
       queue.push(child);
     }
@@ -122,6 +124,9 @@
    */
   function searchAhoCorasick(text, root) {
     const results = [];
+    if (!text || typeof text !== "string" || !root || !root.next) {
+      return results;
+    }
     let curr = root;
 
     for (let i = 0; i < text.length; i++) {

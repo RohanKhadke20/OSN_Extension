@@ -198,7 +198,7 @@
    * @returns {boolean}
    */
   function isUrlShortener(domain) {
-    if (!domain) return false;
+    if (!domain || typeof domain !== "string") return false;
     const clean = domain.toLowerCase().replace(/\.+$/, "");
     const hostWithoutWww = clean.startsWith("www.") ? clean.slice(4) : clean;
     if (SHORTENER_DOMAINS.has(hostWithoutWww)) return true;
@@ -217,7 +217,7 @@
    * @returns {boolean}
    */
   function isDomainWhitelisted(hostname, whitelistedDomains = []) {
-    if (!hostname || !Array.isArray(whitelistedDomains) || whitelistedDomains.length === 0) {
+    if (!hostname || typeof hostname !== "string" || !Array.isArray(whitelistedDomains) || whitelistedDomains.length === 0) {
       return false;
     }
 
@@ -228,7 +228,7 @@
     const hostWithoutWww = hostOnly.startsWith("www.") ? hostOnly.slice(4) : hostOnly;
 
     return whitelistedDomains.some(entry => {
-      if (!entry) return false;
+      if (!entry || typeof entry !== "string") return false;
       let cleanEntry = entry.toLowerCase().trim().replace(/\.+$/, "");
 
       // Strip scheme if present
@@ -283,7 +283,7 @@
    * @returns {boolean}
    */
   function isSafeDomain(domain) {
-    if (!domain) return false;
+    if (!domain || typeof domain !== "string") return false;
     const cleanDomain = domain.toLowerCase().replace(/\.+$/, "");
     const hostWithoutWww = cleanDomain.startsWith("www.") ? cleanDomain.slice(4) : cleanDomain;
 

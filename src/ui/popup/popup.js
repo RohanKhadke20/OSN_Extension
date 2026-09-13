@@ -86,18 +86,20 @@ if (typeof document !== "undefined") {
 
   // Open settings
   const openOptions = () => {
-    if (chrome.runtime.openOptionsPage) {
+    if (chrome.runtime && chrome.runtime.openOptionsPage) {
       chrome.runtime.openOptionsPage();
-    } else {
-      window.open(chrome.runtime.getURL("options/options.html"));
+    } else if (chrome.runtime && chrome.runtime.getURL) {
+      window.open(chrome.runtime.getURL("src/ui/options/options.html"));
     }
   };
 
-  settingsBtn.addEventListener("click", openOptions);
-  optionsLink.addEventListener("click", (e) => {
-    e.preventDefault();
-    openOptions();
-  });
+  if (settingsBtn) settingsBtn.addEventListener("click", openOptions);
+  if (optionsLink) {
+    optionsLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      openOptions();
+    });
+  }
 
   // Review prompt elements
   const reviewPromptEl = document.getElementById("review-prompt");

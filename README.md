@@ -1,21 +1,75 @@
-# OSN Guard - Social Safety & Privacy Shield
+# OSN Guard 🛡️
+
+> **Autonomous, real-time client-side privacy & phishing shield for the social web — 100% offline, zero network egress, zero dependencies.**
 
 [![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](manifest.json)
 [![Manifest](https://img.shields.io/badge/Manifest-V3-success.svg)](manifest.json)
 [![Browsers](https://img.shields.io/badge/browsers-Chrome%20%7C%20Firefox%20%7C%20Safari-orange.svg)](scripts/pack.js)
+[![CI Matrix](https://img.shields.io/badge/CI-Node%2018%20%7C%2020%20%7C%2022-blue.svg)](.github/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-241%20passing-brightgreen.svg)](tests/)
-[![Benchmarks](https://img.shields.io/badge/benchmarks-120k%2B%20ops%2Fsec-orange.svg)](scripts/bench.js)
-[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-blue.svg)](.github/workflows/ci.yml)
-[![Security](https://img.shields.io/badge/CSP-zero--external--network-blueviolet.svg)](manifest.json)
-[![Permissions](https://img.shields.io/badge/permissions-least--privilege-green.svg)](manifest.json)
+[![Benchmarks](https://img.shields.io/badge/benchmarks-160k%2B%20ops%2Fsec-orange.svg)](scripts/bench.js)
+[![Security](https://img.shields.io/badge/CSP-zero--network--egress-blueviolet.svg)](manifest.json)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**OSN Guard** is a hardened, production-ready browser extension (Chromium Manifest V3, Firefox Gecko Event Page, and Safari Web Extension) engineered to safeguard user privacy, data integrity, and identity across Online Social Networks (OSNs) such as Twitter/X, Facebook, LinkedIn, Reddit, Threads, Bluesky, Instagram, YouTube comments, and interactive web applications.
+---
 
-It provides zero-latency, on-device client-side protection against Personal Identifiable Information (PII) leaks, phishing links, IDN homoglyph / punycode spoofing, cryptocurrency drainers, modern Quishing (QR-code phishing), zero-width character evasion, and insecure data transmission — all operating with **zero external dependencies** and an airtight Content Security Policy blocking all external network connections.
+## ⚡ What Happens in Real Time (At a Glance)
+
+OSN Guard intercepts accidental data leaks and deceptive threats in the page DOM **before data leaves your device**:
+
+```text
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│ 1. PRE-SUBMISSION PII INTERCEPTION (Social Comment / AI Composer)                 │
+│                                                                                   │
+│  User types: "Here is the test card 4532 0154 9876 3214 and token sk-live-51A..." │
+│                                                                                   │
+│  ⚠️ [OSN GUARD SHIELD ACTIVATED]                                                  │
+│  • Leaked Payment Card (Luhn Mod-10 Verified)                                     │
+│  • Leaked Stripe Secret Key (High-Entropy Token)                                   │
+│  [🛡️ Redact & Sanitize]  [📋 Copy Cleaned]  [✕ Dismiss]                           │
+├───────────────────────────────────────────────────────────────────────────────────┤
+│ 2. FEED PHISHING & CRYPTO SCAM SCANNER (60 FPS Infinite Scroll)                   │
+│                                                                                   │
+│  Feed link: "https://аpple.com/login"  ──► 🚨 [IDN Homoglyph / Punycode Spoof]    │
+│  Feed post: "Elon giveaway doubling"   ──► 🚨 [Aho-Corasick Multi-Pattern Scam]   │
+│  Feed QR:   [Embedded QR Image]        ──► 🚨 [Visual Quishing Phishing Target]   │
+└───────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 30-Second Quickstart (Zero Dependencies)
+
+OSN Guard requires only native Node.js (v18, v20, or v22) — **no `npm install` required**.
+
+```bash
+# 1. Clone repository
+git clone https://github.com/RohanKhadke20/OSN_Extension.git
+cd OSN_Extension
+
+# 2. Run test suite (241 tests pass in < 2.0s)
+npm test
+
+# 3. Build standalone packages for Chrome, Firefox, & Safari
+npm run pack:all
+```
+
+To load unpacked in your browser:
+1. Open `chrome://extensions/` -> Enable **Developer mode**.
+2. Click **Load unpacked** -> Select the `OSN_Extension` directory.
+3. Open [`test-page.html`](test-page.html) to test all security shields live in an interactive sandbox.
+
+---
+
+## 📖 Deep-Dive Engineering Case Study
+
+For a comprehensive breakdown of the hard technical problems solved, algorithms designed, and architectural trade-offs made, read:
+👉 **[Architecture & Systems Engineering Deep Dive (docs/DESIGN.md)](docs/DESIGN.md)**
 
 ---
 
 ## Architectural Highlights & Engineering Design
+
 
 ```
                      ┌──────────────────────────────────────────────┐

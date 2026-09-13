@@ -31,17 +31,23 @@ jobs:
       - name: Static Syntax Verification
         run: npm run check
 
-      - name: Run Unit Test Suites
+      - name: Run Unit Test Suites (241 tests)
         run: npm test
 
-      - name: Verify Zero-Dependency Packaging
-        run: npm run pack
+      - name: Verify Performance Benchmarks
+        run: npm run bench
 
-      - name: Verify Distribution Archive Artifact
+      - name: Verify Zero-Dependency Multi-Browser Packaging
+        run: npm run pack:all
+
+      - name: Verify Distribution Archive Artifacts (Chrome, Firefox, Safari)
         shell: bash
         run: |
-          if [ ! -f dist/*.zip ]; then
-            echo "Error: Extension distribution ZIP was not generated."
-            exit 1
-          fi
-          echo "Distribution archive verified successfully."
+          for target in chrome firefox safari; do
+            if ! ls dist/*${target}*.zip 1> /dev/null 2>&1 && ! ls dist/osn-guard-safety-privacy-shield-v*.zip 1> /dev/null 2>&1; then
+              echo "Error: Extension distribution ZIP for $target was not generated."
+              exit 1
+            fi
+          done
+          echo "All multi-browser distribution archives verified successfully."
+

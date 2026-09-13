@@ -1,0 +1,44 @@
+name: 💡 Feature Request / Enhancement
+description: Propose a new detection heuristic, threat signature pattern, or UI enhancement for OSN Guard.
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a feature! Please note that all proposals must strictly adhere to OSN Guard's non-negotiable architectural invariants:
+        - **Zero new runtime dependencies** (Native modern JavaScript & Web Platform APIs only).
+        - **Zero network egress** (All processing must remain 100% on-device under `connect-src 'none'`).
+        - **Least privilege permissions** (Limited strictly to `{ storage, activeTab, contextMenus }`).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement / Threat Vector
+      description: What user problem, emerging phishing pattern, or privacy challenge does this address?
+      placeholder: Describe the threat or use case clearly...
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution / Architecture
+      description: How should this feature be implemented in client-side code?
+      placeholder: Describe the detection logic, data-driven threat-config rules, or UI presentation...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions Considered
+      description: Describe any alternative approaches or existing tools you've considered.
+  - type: checkboxes
+    id: invariants_check
+    attributes:
+      label: Invariant Compliance Confirmation
+      options:
+        - label: This proposed feature requires ZERO external network requests or remote APIs.
+          required: true
+        - label: This proposed feature requires ZERO third-party npm runtime dependencies.
+          required: true
+        - label: This proposed feature does not expand broad host permissions (`host_permissions: none`).
+          required: true

@@ -239,6 +239,19 @@ npm run pack:all        # Builds all three browser targets simultaneously
 
 ---
 
+## Community & Contributing
+
+We welcome community contributions! Please read our guidelines before submitting issues or pull requests:
+
+* **[Contributing Guidelines](CONTRIBUTING.md)**: Setup instructions, coding standards, and PR workflows.
+* **[Code of Conduct](CODE_OF_CONDUCT.md)**: Contributor Covenant v2.1 standards.
+* **[Security Policy](SECURITY.md)**: Responsible vulnerability disclosure process.
+* **[Changelog](CHANGELOG.md)**: Release history and version notes.
+* **[Architecture Decision Records](docs/DECISIONS.md)**: Structural and technical decision rationale.
+
+---
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+

@@ -31,7 +31,9 @@ OSN Guard is designed under zero-trust, local-only client-side execution princip
    Untrusted text and URL data from web pages are never injected using innerHTML. All badges, alerts, and tooltips are constructed using native DOM API methods (textContent, createElement, replaceChildren).
 
 4. **Isolated Web Context**:
-   Content scripts run in Chrome isolated world, preventing web page scripts from inspecting extension memory, storage tokens, or custom PII regex patterns.
+   Content scripts run in isolated execution worlds across Chromium, Firefox, and Safari, preventing web page scripts from inspecting extension memory, storage tokens, or custom PII regex patterns.
+
+For an in-depth analysis of the system attack surface and STRIDE mitigations, see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ---
 
@@ -41,7 +43,8 @@ We take the security and privacy of our users seriously. If you identify a secur
 
 ### How to Report
 
-- **Contact**: Open a private GitHub Security Advisory or email security maintainers.
+- **GitHub Security Advisory (Preferred)**: [Submit a private security advisory](https://github.com/RohanKhadke20/OSN_Extension/security/advisories/new).
+- **Email**: Contact maintainers via the email address listed in our GitHub profile.
 - **Include**:
   - Detailed description of the vulnerability and attack scenario.
   - Minimal reproducible example or proof-of-concept (PoC).
@@ -55,3 +58,4 @@ We take the security and privacy of our users seriously. If you identify a secur
 - **Remediation & Patch Release**: Critical vulnerabilities patched within 14 business days.
 
 We kindly request that you refrain from publicly disclosing the issue until a fix has been released.
+

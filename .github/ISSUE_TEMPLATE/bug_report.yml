@@ -1,0 +1,96 @@
+name: 🐛 Bug Report
+description: Report an issue, false positive/negative detection, or unexpected behavior in OSN Guard.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please ensure you have tested with the latest release (v1.3.x) and have verified that the issue is reproducible.
+        **Do not post real personal identifiable information (PII), credit cards, or actual secret keys in public issues.**
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser Target & Version
+      description: Select the browser where the issue occurred.
+      options:
+        - Google Chrome / Chromium (MV3)
+        - Microsoft Edge (MV3)
+        - Brave Browser (MV3)
+        - Mozilla Firefox (Gecko Event Page)
+        - Apple Safari (WebExtensions)
+        - Other (please specify in description)
+    validations:
+      required: true
+  - type: dropdown
+    id: extension_version
+    attributes:
+      label: OSN Guard Version
+      options:
+        - "1.3.0"
+        - "1.2.0"
+        - "1.1.0"
+        - "Unpacked development build (main / feature branch)"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows 11 / 10
+        - macOS (Sonoma / Ventura / Sequoia)
+        - Linux (Ubuntu / Debian / Fedora / Arch)
+        - ChromeOS
+    validations:
+      required: true
+  - type: dropdown
+    id: affected_component
+    attributes:
+      label: Affected Component
+      options:
+        - Link / URL Phishing Scanner
+        - PII Pre-Submission Detection
+        - Scam & Social Engineering Classifier
+        - Insecure HTTP Form Action Detector
+        - Quishing (QR Code) Visual Scanner
+        - Popup Security Dashboard
+        - Options Page & Rule Management
+        - Cross-Browser Shim / Extension Lifecycle
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Bug
+      description: A clear and concise description of what the bug is.
+      placeholder: What happened? What did you expect to happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: Steps to Reproduce
+      description: Provide step-by-step instructions to reproduce the issue.
+      placeholder: |
+        1. Navigate to '...'
+        2. Enter mock text '...' (no real PII!)
+        3. Observe scanner alert/badge '...'
+    validations:
+      required: true
+  - type: textarea
+    id: console_logs
+    attributes:
+      label: Browser Console Logs (Optional)
+      description: Paste any error messages from the DevTools console (press F12 -> Console).
+      render: shell
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I have verified that this issue does not contain real PII, tokens, or confidential data.
+          required: true
+        - label: I have searched existing issues to ensure this is not a duplicate.
+          required: true

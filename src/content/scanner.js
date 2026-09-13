@@ -232,6 +232,15 @@
 
   // Listen for background commands (e.g. manual rescan request or context-menu scan results)
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Verify sender is the authorized internal extension
+    if (sender && sender.id && chrome.runtime && chrome.runtime.id && sender.id !== chrome.runtime.id) {
+      return false;
+    }
+
+    if (!message || typeof message !== "object" || typeof message.action !== "string") {
+      return false;
+    }
+
     if (message.action === "triggerRescan") {
       rescanPage();
       sendResponse({ status: "success", threatCount: pageThreats.length });

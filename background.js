@@ -6,7 +6,7 @@ if (typeof globalThis.chrome === "undefined" && typeof globalThis.browser !== "u
 
 // In Service Workers, dynamically import dependencies; in Firefox event pages, dependencies load via manifest scripts array
 if (typeof importScripts === "function") {
-  importScripts("core/url-analyzer.js", "core/pii-analyzer.js", "core/scam-analyzer.js");
+  importScripts("core/compat.js", "core/url-analyzer.js", "core/pii-analyzer.js", "core/scam-analyzer.js");
 }
 
 // Storage adapter prioritizing session storage for ephemeral tab state

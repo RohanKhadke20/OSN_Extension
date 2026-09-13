@@ -223,6 +223,7 @@ function buildTargetManifest(baseManifest, target = "chrome") {
     // 1. Convert service_worker to event page scripts array with strict dependency load order
     manifest.background = {
       scripts: [
+        "core/compat.js",
         "core/url-analyzer.js",
         "core/pii-analyzer.js",
         "core/scam-analyzer.js",

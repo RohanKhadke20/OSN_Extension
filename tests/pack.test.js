@@ -137,6 +137,7 @@ describe("Distribution Packager (scripts/pack.js)", () => {
       const firefoxManifest = buildTargetManifest(baseManifest, "firefox");
       assert.equal(firefoxManifest.background.service_worker, undefined);
       assert.deepEqual(firefoxManifest.background.scripts, [
+        "core/compat.js",
         "core/url-analyzer.js",
         "core/pii-analyzer.js",
         "core/scam-analyzer.js",

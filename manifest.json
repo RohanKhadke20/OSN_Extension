@@ -18,6 +18,7 @@
     {
       "matches": ["<all_urls>"],
       "js": [
+        "core/compat.js",
         "core/url-analyzer.js",
         "core/pii-analyzer.js",
         "core/scam-analyzer.js",

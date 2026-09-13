@@ -153,13 +153,14 @@ if (typeof document !== "undefined") {
         };
         chrome.storage.local.set({ reviewState: updated }, () => {
           hide();
-          const isFirefox = typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.includes("Firefox");
           const extensionId = (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id)
             ? chrome.runtime.id
             : "osn-guard";
-          const reviewUrl = isFirefox
-            ? "https://addons.mozilla.org/firefox/addon/osn-guard/"
-            : `https://chromewebstore.google.com/detail/${extensionId}/reviews`;
+          const reviewUrl = (typeof OSNCompat !== "undefined" && typeof OSNCompat.getStoreReviewUrl === "function")
+            ? OSNCompat.getStoreReviewUrl(extensionId)
+            : (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.includes("Firefox")
+                ? "https://addons.mozilla.org/firefox/addon/osn-guard/"
+                : `https://chromewebstore.google.com/detail/${extensionId}/reviews`);
 
           if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
             chrome.tabs.create({ url: reviewUrl });
@@ -305,11 +306,16 @@ if (typeof document !== "undefined") {
 
   // Check if current tab is a browser internal URL where extensions cannot run
   const isInternalUrl = (urlString) => {
+    if (typeof OSNCompat !== "undefined" && typeof OSNCompat.isInternalUrl === "function") {
+      return OSNCompat.isInternalUrl(urlString);
+    }
     if (!urlString) return false;
     const lower = urlString.toLowerCase();
     return (
       lower.startsWith("chrome://") ||
       lower.startsWith("chrome-extension://") ||
+      lower.startsWith("moz-extension://") ||
+      lower.startsWith("safari-web-extension://") ||
       lower.startsWith("edge://") ||
       lower.startsWith("about:") ||
       lower.startsWith("view-source:")

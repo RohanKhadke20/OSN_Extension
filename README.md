@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](manifest.json)
 [![Manifest](https://img.shields.io/badge/Manifest-V3-success.svg)](manifest.json)
 [![Browsers](https://img.shields.io/badge/browsers-Chrome%20%7C%20Firefox%20%7C%20Safari-orange.svg)](scripts/pack.js)
-[![Tests](https://img.shields.io/badge/tests-135%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-241%20passing-brightgreen.svg)](tests/)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-120k%2B%20ops%2Fsec-orange.svg)](scripts/bench.js)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-blue.svg)](.github/workflows/ci.yml)
 [![Security](https://img.shields.io/badge/CSP-zero--external--network-blueviolet.svg)](manifest.json)
@@ -20,7 +20,7 @@ It provides zero-latency, on-device client-side protection against Personal Iden
 ```
                      ┌──────────────────────────────────────────────┐
                      │          OSN Guard Service Worker            │
-                     │              (background.js)                 │
+                     │       (src/background/service-worker.js)     │
                      │  - Persistent tab threat store (MV3 session) │
                      │  - Orphaned tab storage reconciliation       │
                      │  - Internal IPC sender validation            │
@@ -34,7 +34,7 @@ It provides zero-latency, on-device client-side protection against Personal Iden
 │                                                                  │
 │  ┌─────────────────────────┐      ┌───────────────────────────┐  │
 │  │   Content Script        │      │   Interactive Composer    │  │
-│  │     (content.js)        │      │   - Real-time PII guard   │  │
+│  │ (src/content/scanner.js)│      │   - Real-time PII guard   │  │
 │  │   - 10ms frame budget   │◄────►│   - Floating alert banner │  │
 │  │   - Batched DOM rAF/rIC │      │   - Luhn / ISO 7064 checks│  │
 │  │   - Shared body tooltip │      │   - Zero-reflow detection │  │
@@ -42,10 +42,12 @@ It provides zero-latency, on-device client-side protection against Personal Iden
 │               │                                                  │
 │               ▼                                                  │
 │  ┌─────────────────────────────────────────────────────────────┐ │
-│  │                    Core Detection Engines                   │ │
-│  │  1. url-analyzer.js (Safe registries, Punycode, TLD, IPs)   │ │
-│  │  2. pii-analyzer.js (Cards, IBAN, SSN, API tokens, ReDoS)   │ │
-│  │  3. scam-analyzer.js (Zero-width evasion, Quishing, Drainers)│ │
+│  │             Core Compatibility & Threat Engines             │ │
+│  │  1. src/core/compat.js (OSNCompat cross-browser shim)       │ │
+│  │  2. src/core/threat-config.js (Canonical DEFAULT_CONFIG)   │ │
+│  │  3. src/core/url-analyzer.js (Safe registries, Punycode)   │ │
+│  │  4. src/core/pii-analyzer.js (Cards, IBAN, SSN, ReDoS safe) │ │
+│  │  5. src/core/scam-analyzer.js (Aho-Corasick, Quishing)      │ │
 │  └─────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -122,7 +124,7 @@ Manifest V3 service workers terminate after inactivity. OSN Guard stores ephemer
 
 ### 7. Advanced Engine & Enterprise Governance (Phase 3)
 * **Visual Quishing (QR Phishing) Interception**: Frame-budgeted image inspection utilizing native `window.BarcodeDetector` (with automatic fallback to QR payload attributes). Decodes QR destinations in social cards/embedded images and immediately overlays visual warning badges if destinations point to malicious or unverified sites.
-* **Aho-Corasick Multi-Pattern Trie Automaton**: Linear-time `O(n + m)` string matching trie replacing legacy loop scanning in `core/scam-analyzer.js`. Precompiles keyword failure transitions at startup, yielding **122,000+ ops/sec throughput** (0.008 ms/op) for real-time feed processing.
+* **Aho-Corasick Multi-Pattern Trie Automaton**: Linear-time `O(n + m)` string matching trie replacing legacy loop scanning in `src/core/scam-analyzer.js`. Precompiles keyword failure transitions at startup, yielding **210,000+ ops/sec throughput** (0.005 ms/op) for real-time feed processing.
 * **Chrome Enterprise Managed Storage Policy**: Fully compliant Chrome Enterprise schema (`managed_schema.json`) supporting corporate endpoint deployment via GPO / Google Admin Console. Automatically syncs `chrome.storage.managed` into local state, enforcing mandatory corporate whitelist domains, proprietary custom PII rules, and locking protection shields against employee tampering.
 
 ---
@@ -133,42 +135,52 @@ Manifest V3 service workers terminate after inactivity. OSN Guard stores ephemer
 osn-safety-scanner/
 ├── .github/
 │   └── workflows/ci.yml       # Automated CI matrix (Node 18/20/22 on Ubuntu & Windows)
-├── docs/
-│   ├── THREAT_MODEL.md        # Comprehensive STRIDE threat model & attack surface analysis
-│   ├── STORE_LISTING.md       # Production Chrome Web Store & AMO listing copy and ASO keywords
+├── dist/                      # Multi-browser distribution packages (Chrome, Firefox, Safari)
+├── docs/                      # Authoritative project documentation & research
+│   ├── RESEARCH.md            # WebExtensions MV3 standards, browser matrix, & CVE analysis
+│   ├── DECISIONS.md           # Architecture Decision Records (ADR-001 through ADR-006)
+│   ├── CHANGELOG.md           # Keep a Changelog version history (v1.0.0 through v1.3.0)
+│   ├── API_REFERENCE.md       # Full API contracts, IPC protocol, & function signatures
+│   ├── DEVELOPMENT.md         # Developer onboarding & unpacked extension setup guide
+│   ├── COMPATIBILITY.md       # Cross-browser shim architecture & manifest variance
+│   ├── THREAT_MODEL.md        # STRIDE threat model & attack surface analysis
+│   ├── STORE_LISTING.md       # Chrome Web Store & Firefox AMO listing copy
 │   ├── ROADMAP.md             # Strategic technical roadmap (v1.4 to v2.0)
-│   └── PROJECT_ENGINEERING_BASELINE.md # Architecture & readiness baseline
-├── manifest.json              # Manifest V3 configuration (Least-privilege, strict CSP, managed_schema)
-├── managed_schema.json        # Chrome Enterprise Managed Storage policy definition schema
-├── background.js              # Service worker (tab threat store, badge sync, IPC validation, audit log, self-healing)
-├── content.js                 # Batched DOM scanner, visual quishing detector, invalidation teardown, memory bounds
-├── content.css                # Tooltip, badge, quishing alert badge, toast notification, and focus-visible styles
-├── core/
-│   ├── url-analyzer.js        # URL safety engine, IDN homoglyphs, IP obfuscation, shorteners
-│   ├── pii-analyzer.js        # Multi-pattern PII detector, Luhn check, ISO 7064 IBAN, ReDoS linter
-│   └── scam-analyzer.js       # Aho-Corasick trie, zero-width evasion stripper, Quishing heuristics, Web3 drainers
-├── popup/
-│   ├── popup.html             # Glassmorphic safety dashboard UI & ethical review banner
-│   ├── popup.js               # Reactive score calculator, shield toggles, enterprise lockouts, review eligibility
-│   └── popup.css              # Dashboard styling, accent variables, SVG radial gauge, review card
-├── options/
-│   ├── options.html           # Settings UI (enterprise banner, PII sandbox, whitelist, audit log, metrics)
-│   ├── options.js             # Options controller, enterprise policy locks, sandbox redactor, pre-reset undo
-│   └── options.css            # Extracted semantic stylesheet (zero inline styles, enterprise badges)
+│   └── PROJECT_ENGINEERING_BASELINE.md # Engineering baseline assessment
+├── manifest.json              # Manifest V3 configuration (Least-privilege, strict CSP)
+├── managed_schema.json        # Chrome Enterprise Managed Storage policy schema
+├── src/                       # Production extension source code
+│   ├── assets/icons/          # Extension toolbar & store icons (PNG & SVG)
+│   ├── background/
+│   │   └── service-worker.js  # MV3 Service worker (session store, badge sync, IPC, self-healing)
+│   ├── content/
+│   │   ├── scanner.js         # Batched DOM scanner, visual quishing, memory bounds
+│   │   └── scanner.css        # Tooltip, badge, alert banners, & toast styles
+│   ├── core/
+│   │   ├── compat.js          # Cross-browser shim & Promise/callback bridge (OSNCompat)
+│   │   ├── threat-config.js   # Canonical threat configuration data & deepFreeze
+│   │   ├── url-analyzer.js    # URL safety engine, IDN homoglyphs, IP obfuscation, shorteners
+│   │   ├── pii-analyzer.js    # Multi-pattern PII detector, Luhn, ISO 7064 IBAN, ReDoS linter
+│   │   └── scam-analyzer.js   # Aho-Corasick trie, zero-width evasion, Quishing, Web3 drainers
+│   └── ui/
+│       ├── popup/             # Popup dashboard markup, styles, & reactive gauge
+│       └── options/           # Options configuration UI, PII sandbox, & audit log
 ├── scripts/
-│   ├── pack.js                # Multi-target MS-DOS/DEFLATE packager (Chrome, Firefox, Safari)
-│   └── bench.js               # Zero-dependency performance benchmark suite (node:perf_hooks)
+│   ├── pack.js                # Zero-bundler multi-target packager (Chrome, Firefox, Safari)
+│   └── bench.js               # Zero-dependency performance benchmark suite
 ├── tests/
+│   ├── compat.test.js         # Cross-browser shim unit tests (5 tiers, 100 tests)
+│   ├── threat-config.test.js  # Threat configuration immutability & factory tests
 │   ├── dashboard-score.test.js# Dashboard scoring engine & safety status transition tests
 │   ├── url-safety.test.js     # URL analyzer unit, IDN, shorteners, dangerous executables
 │   ├── pii-detector.test.js   # PII, Luhn algorithm, IBAN ISO 7064, LRU cache, ReDoS test suite
-│   ├── scam-detector.test.js  # Aho-Corasick automaton, scam, quishing, zero-width evasion, Web3 drainer tests
-│   ├── storage-sync.test.js   # Enterprise managed policy sync, whitelist wildcard, backup schema, self-healing
-│   ├── review-prompt.test.js  # Ethical review prompt 4-criteria eligibility test suite
-│   ├── pack.test.js           # Multi-target extension packager, managed_schema bundle, & zip structure tests
+│   ├── scam-detector.test.js  # Aho-Corasick automaton, scam, quishing, zero-width evasion
+│   ├── storage-sync.test.js   # Enterprise managed policy sync, whitelist wildcard, self-healing
+│   ├── review-prompt.test.js  # Ethical review prompt eligibility test suite
+│   ├── pack.test.js           # Multi-target extension packager & zip structure tests
 │   ├── bench.test.js          # Benchmark suite unit tests
 │   └── e2e/
-│       ├── extension-lifecycle.test.js # Headless browser lifecycle, visual quishing & pathological DOM burst E2E
+│       ├── extension-lifecycle.test.js # Headless browser lifecycle & DOM burst E2E
 │       └── cdp-client.js      # Zero-dependency Chrome DevTools Protocol client
 ├── test-page.html             # Interactive browser sandbox for manual extension verification
 └── package.json               # Scripts, static check scripts, and project metadata
@@ -182,10 +194,10 @@ OSN Guard achieves microsecond-level execution latency to prevent any disruption
 
 | Component | Throughput | Average Latency |
 | :--- | :--- | :--- |
-| **URL Safety Analyzer** | ~52,000+ ops/sec | 0.019 ms / op |
-| **PII Detection Engine** | ~48,000+ ops/sec | 0.021 ms / op |
-| **PII Masking & Redaction** | ~86,000+ ops/sec | 0.012 ms / op |
-| **Scam & Fraud Classifier (Aho-Corasick)** | ~122,000+ ops/sec | 0.008 ms / op |
+| **URL Safety Analyzer** | ~116,000+ ops/sec | 0.0086 ms / op |
+| **PII Detection Engine** | ~137,000+ ops/sec | 0.0073 ms / op |
+| **PII Masking & Redaction** | ~147,000+ ops/sec | 0.0068 ms / op |
+| **Scam & Fraud Classifier (Aho-Corasick)** | ~217,000+ ops/sec | 0.0046 ms / op |
 
 *Measured on standard workstation hardware via `npm run bench`.*
 
@@ -199,7 +211,7 @@ OSN Guard uses Node.js's native test runner (`node:test` and `node:assert/strict
 # 1. Run static syntax verification across all source, script, and test files
 npm run check
 
-# 2. Run complete unit test suite (135 tests across 27 suites)
+# 2. Run complete unit test suite (241 tests across 55 suites)
 npm test
 
 # 3. Run performance benchmarks

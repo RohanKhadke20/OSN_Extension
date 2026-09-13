@@ -44,7 +44,26 @@ OSN Guard is dedicated to delivering the fastest, most reliable, and completely 
 
 ## 2. Release Milestones & Feature Specifications
 
-### 🚀 Version 1.4 — Local WebAssembly (Wasm) Engine & Offline Quishing Inspection
+### 🚀 Version 1.3.0 — Delivered Core Platform Milestones (September 2026)
+**Delivered Capabilities:**
+- **Micro-Quantized Scam Keyword Trie (`src/core/scam-analyzer.js`):**
+  - Replaced sequential regex iteration with an Aho-Corasick multi-pattern trie automaton matching 216+ keywords in linear time `O(n + m)`.
+  - Throughput benchmark exceeds 210,000 ops/sec.
+- **Client-Side Quishing (QR Code Phishing) Visual Engine (`src/content/scanner.js`):**
+  - Leverages native `BarcodeDetector` API for real-time QR extraction from post images without cloud upload.
+  - Extracted destinations verified through `OSNUrlAnalyzer` offline.
+- **Cross-Browser Compatibility Shim (`src/core/compat.js`):**
+  - Unified `chrome.*` and `browser.*` namespaces with dual callback/Promise bridge, `storage.session` fallbacks, and internal URL routing.
+- **Data-Driven Threat Configuration Engine (`src/core/threat-config.js`):**
+  - Canonical `DEFAULT_THREAT_CONFIG` and factory patterns (`createUrlEngine`, `createPiiEngine`, `createScamEngine`).
+- **Multi-Store Automated Zero-Bundler Release Pipeline (`scripts/pack.js`):**
+  - Generates standalone distribution ZIPs for Chrome, Firefox AMO, and Safari in `dist/` using standard Node.js built-ins.
+- **Enterprise Managed Policy Synchronization:**
+  - Integrated `managed_schema.json` enabling IT administrators to enforce whitelists and mandatory PII rules via `chrome.storage.managed`.
+
+---
+
+### 🚀 Version 1.4 — Local WebAssembly (Wasm) Engine & Advanced Matchers
 **Target Delivery:** Q4 2026  
 **Primary Focus:** Performance Optimization & Advanced Multimodal Threat Extraction
 
@@ -52,18 +71,14 @@ OSN Guard is dedicated to delivering the fastest, most reliable, and completely 
   - Compile a lightweight, zero-dependency C/Rust string similarity library into a compact Wasm module (< 30 KB).
   - Implement SIMD-accelerated Levenshtein edit distance and Bitap fuzzy search against the top 10,000 global domain names.
   - Lower average domain comparison latency from `0.015 ms` to `< 0.003 ms` per anchor node.
-- **Client-Side Quishing (QR Code Phishing) Visual Engine:**
-  - Utilize the native browser `BarcodeDetector` API with fallback to a pure WebAssembly QR decoder.
-  - Inspect embedded image elements (`<img>`, `<svg>`, `canvas`) rendered in social feeds for QR codes encoding phishing or credential-harvesting destinations.
-  - Extract the embedded URL and run it through `OSNUrlAnalyzer` before the user scans it with their mobile device—all completely offline without uploading images.
-- **Micro-Quantized Scam Keyword Trie:**
-  - Replace sequential regex evaluation with an Aho-Corasick trie for dictionary scam matching, reducing worst-case token inspection overhead on 50,000-character social threads.
+- **Pure Wasm Offline QR Decoder Fallback:**
+  - Compile a lightweight QR barcode reader to WebAssembly to provide fallback quishing decoding on browsers lacking native `BarcodeDetector` support (e.g. Firefox Gecko).
 
 ---
 
-### 📱 Version 1.5 — Multi-Platform Ecosystem & Mobile Browsers
+### 📱 Version 1.5 — Multi-Platform Ecosystem & Store Distribution
 **Target Delivery:** Q1 2027  
-**Primary Focus:** Cross-Browser Reach & Mobile Social Network Defense
+**Primary Focus:** Store Distribution & Mobile Social Network Defense
 
 - **Official Safari Extension for macOS, iOS & iPadOS:**
   - Package native macOS and iOS companion apps using Xcode Safari Web Extension Converter (`xcrun safari-web-extension-converter`).
@@ -74,24 +89,13 @@ OSN Guard is dedicated to delivering the fastest, most reliable, and completely 
   - Optimize the touch hit-target dimensions in `popup.html` for mobile viewports (minimum 48x48 px touch targets).
 - **Microsoft Edge Add-ons Certification:**
   - Publish official signed `.crx` packages to the Microsoft Partner Center for Edge Add-ons catalog availability.
-- **Multi-Store Automated Release Pipeline:**
-  - Expand `scripts/pack.js` to automatically generate store-ready upload artifacts:
-    - Chrome Web Store ZIP
-    - Mozilla Firefox AMO ZIP (`web-ext build`)
-    - Apple Safari Xcode project archive
 
 ---
 
-### 🏢 Version 1.6 — Enterprise Fleet Deployment & Managed Policy Sync
+### 🏢 Version 1.6 — Cryptographic Audit & Enterprise Diagnostics
 **Target Delivery:** Q2 2027  
-**Primary Focus:** Corporate Endpoints & Regulatory Compliance
+**Primary Focus:** Corporate Endpoints & Tamper-Evident Auditing
 
-- **Google Workspace & Microsoft Intune Policy Sync via `chrome.storage.managed`:**
-  - Introduce `managed_schema.json` enabling IT enterprise administrators to centrally configure extension behavior via Chrome Enterprise and Microsoft Edge management consoles.
-  - Support managed policy variables:
-    - `forcedWhitelistedDomains`: Corporate intranets and trusted partner portals that cannot be altered or removed by end users.
-    - `mandatoryCustomPiiRules`: Organizational regex patterns for internal employee IDs, project codenames, internal ticket numbers, and customer account identifiers.
-    - `enforcedShields`: Prevents employees from disabling critical protection toggles on corporate-managed laptops.
 - **Cryptographically Sealed Audit Export:**
   - Enable one-click export of the local security event log, signed with a client-generated WebCrypto ECDSA key to provide tamper-evident compliance evidence during SOC 2 and ISO 27001 audits.
 - **Silent Headless Self-Diagnostics:**

@@ -130,7 +130,7 @@ To establish realistic expectations, the following items are formally designated
   - No recursive deep-merge or unsafe property assignments (`updates.whitelistedDomains = parsed.whitelistedDomains.filter(...)`).
 
 ### Actor 4: Inter-Extension IPC Impersonation
-- **Objective:** Trigger privileged actions (clearing logs, altering stats, manipulating badge counts) by sending forged messages to `background.js`.
+- **Objective:** Trigger privileged actions (clearing logs, altering stats, manipulating badge counts) by sending forged messages to `src/background/service-worker.js`.
 - **Attack Vectors:**
   - Another extension installed in the browser sending `chrome.runtime.sendMessage(OSN_ID, ...)`.
 - **Mitigation:**
@@ -147,7 +147,7 @@ To establish realistic expectations, the following items are formally designated
 
 | STRIDE Category | Threat Description | Severity | OSN Guard Defensive Control |
 | :--- | :--- | :--- | :--- |
-| **Spoofing** | Adversary extension impersonates content script to report false threats. | High | Internal `sender.id === chrome.runtime.id` verification in `background.js`. |
+| **Spoofing** | Adversary extension impersonates content script to report false threats. | High | Internal `sender.id === chrome.runtime.id` verification in `src/background/service-worker.js`. |
 | **Tampering** | Malicious backup file modifies settings or injects polluted prototype properties. | High | Strict, schema-based extraction of valid primitives; prototype pollution defenses verified by unit tests. |
 | **Repudiation** | User denies an incident occurred or malicious script wipes logs. | Low | Security incident log recorded in `chrome.storage.local` with rolling 50-item cap; exportable as JSON audit trail. |
 | **Information Disclosure** | Visiting sensitive URLs or leaking typed passwords/PII to external telemetry. | Critical | Strict CSP `connect-src 'none'`; zero remote analytics; zero telemetry endpoints; local-only processing. |

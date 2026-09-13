@@ -17,7 +17,7 @@ Over ten verified engineering iterations, the codebase has established:
 - Pure client-side zero-leak architecture (no telemetry, no external font or script dependencies, full local privacy).
 - Deterministic heuristic and algorithmic analyzers (ISO 7064 Mod-97 IBAN, Luhn Mod-10 payment cards, US SSN, high-entropy tokens, JWTs, dangerous schemes, Web3 drainer approval signatures, obfuscated IP notations).
 - Robust MV3 lifecycle handling (`chrome.storage.session` for transient tab threat persistence, tab switch sync, and navigation cleanup).
-- 85 automated unit tests across 21 suites, 4 end-to-end headless browser lifecycle tests, and 4 throughput benchmarks running on native Node.js with zero external runtime dependencies.
+- 241 automated unit tests across 55 suites, 6 end-to-end headless browser lifecycle tests, and 4 throughput benchmarks running on native Node.js with zero external runtime dependencies.
 - Multi-OS and multi-version CI/CD matrix via GitHub Actions (Ubuntu/Windows across Node 18, 20, 22).
 
 While the core detection algorithms and basic browser extension components are sound, preparing this repository for enterprise and commercial Chrome Web Store / Firefox AMO production requires addressing several critical operational and engineering maturity gaps: missing extension icons, broad `<all_urls>` script execution without node batch caps on non-OSN pages, lack of end-to-end browser integration tests, missing `.gitignore` and build packaging scripts, and unlocalized UI text.
@@ -43,7 +43,7 @@ OSN Guard intercepts threats in the user's browser before data leaves the client
                                                   │ chrome.action
                                   ┌───────────────┴───────────────┐
                                   │    Service Worker Engine      │
-                                  │       (background.js)         │
+                                  │(src/background/service-worker)│
                                   │ - chrome.storage.session      │
                                   │ - Serialized Stats Queue      │
                                   │ - Navigation Lifecycle Cleanup│
@@ -53,7 +53,7 @@ OSN Guard intercepts threats in the user's browser before data leaves the client
                                           │               ▼
 ┌─────────────────────────────────────────┴────┐  ┌───────────────────────────────────┐
 │              Target Web Page                 │  │       Popup / Options UI          │
-│                (content.js)                  │  │     (popup.js / options.js)       │
+│         (src/content/scanner.js)             │  │   (src/ui/popup / src/ui/options) │
 │                                              │  │                                   │
 │  ┌──────────────────┐  ┌──────────────────┐  │  │  ┌─────────────────────────────┐  │
 │  │ MutationObserver │  │ Composer Monitor │  │  │  │ Live Circular Score Engine  │  │
@@ -65,9 +65,11 @@ OSN Guard intercepts threats in the user's browser before data leaves the client
 │                      ▼                       │  │  │ Rules & Whitelist Manager   │  │
 │  ┌────────────────────────────────────────┐  │  │  │ - Export / Import JSON      │  │
 │  │         Core Analyzer Engines          │  │  │  │ - FQDN Sanitization         │  │
-│  │  1. url-analyzer.js                    │  │  │  └─────────────────────────────┘  │
-│  │  2. pii-analyzer.js                    │  │  └───────────────────────────────────┘
-│  │  3. scam-analyzer.js                   │  │
+│  │  1. src/core/compat.js (OSNCompat)     │  │  │  └─────────────────────────────┘  │
+│  │  2. src/core/threat-config.js          │  │  └───────────────────────────────────┘
+│  │  3. src/core/url-analyzer.js           │  │
+│  │  4. src/core/pii-analyzer.js           │  │
+│  │  5. src/core/scam-analyzer.js          │  │
 │  └────────────────────────────────────────┘  │
 └──────────────────────────────────────────────┘
 ```
@@ -82,26 +84,49 @@ D:\Practice\osn-safety-scanner\
 ├── .github/
 │   └── workflows/
 │       └── ci.yml               # GitHub Actions CI matrix (Ubuntu/Windows, Node 18/20/22)
-├── core/
-│   ├── pii-analyzer.js          # Core PII engine: Luhn, IBAN, SSN, tokens, redaction
-│   ├── scam-analyzer.js         # Core Scam engine: 11 threat categories & priority sorting
-│   └── url-analyzer.js          # Core URL engine: safe domains, punycode, redirects, TLDs
-├── options/
-│   ├── options.html             # Options management page (Rules, Whitelist, Backup, Stats)
-│   └── options.js               # Options controller (CRUD, export/import, sanitization)
-├── popup/
-│   ├── popup.html               # Extension toolbar dashboard markup
-│   ├── popup.css                # Dashboard styling with dark theme and SVG progress ring
-│   └── popup.js                 # Dashboard controller, animated score, tab query, rescanning
+├── dist/                        # Multi-browser distribution packages (Chrome, Firefox, Safari)
+├── docs/                        # Project documentation (ADRs, APIs, research, baseline)
+├── scripts/
+│   ├── bench.js                 # Core throughput benchmarks (URL, PII, Scam)
+│   └── pack.js                  # Multi-target ZIP packager using Node.js built-ins
+├── src/                         # Production extension source tree
+│   ├── assets/
+│   │   └── icons/               # Extension icons (16, 48, 128 px PNG + SVG)
+│   ├── background/
+│   │   └── service-worker.js    # MV3 Service Worker (stats queue, session storage, lifecycle)
+│   ├── content/
+│   │   ├── scanner.css          # Tooltips and input alert banner styles
+│   │   └── scanner.js           # Content script (DOM scanning, input interception, tooltips)
+│   ├── core/
+│   │   ├── compat.js            # Cross-browser shim & Promise bridge (828 lines)
+│   │   ├── pii-analyzer.js      # Core PII engine: Luhn, IBAN, SSN, tokens, redaction
+│   │   ├── scam-analyzer.js     # Core Scam engine: Aho-Corasick trie, 15 threat categories
+│   │   ├── threat-config.js     # Canonical threat configuration data & deepFreeze
+│   │   └── url-analyzer.js      # Core URL engine: safe domains, punycode, redirects, TLDs
+│   └── ui/
+│       ├── options/
+│       │   ├── options.css      # Options styling
+│       │   ├── options.html     # Options management page (Rules, Whitelist, Backup, Stats)
+│       │   └── options.js       # Options controller (CRUD, export/import, sanitization)
+│       └── popup/
+│           ├── popup.css        # Dashboard styling with dark theme and SVG progress ring
+│           ├── popup.html       # Extension toolbar dashboard markup
+│           └── popup.js         # Dashboard controller, animated score, tab query, rescanning
 ├── tests/
+│   ├── bench.test.js            # Benchmark accuracy & throughput tests
+│   ├── compat.test.js           # Cross-browser shim unit tests (5 tiers, 100 tests)
 │   ├── dashboard-score.test.js  # Score deduction and status algorithm unit tests
+│   ├── pack.test.js             # Multi-target packaging unit tests
 │   ├── pii-detector.test.js     # PII detection, checksum, and masking unit tests
+│   ├── review-prompt.test.js    # Ethical review prompt eligibility tests
 │   ├── scam-detector.test.js    # Scam categories and severity precedence unit tests
 │   ├── storage-sync.test.js     # Whitelist matching, custom regex resilience, math tests
-│   └── url-safety.test.js       # URL safety, dangerous schemes, open redirects tests
-├── background.js                # MV3 Service Worker (stats queue, session storage, lifecycle)
-├── content.js                   # Content script (DOM scanning, input interception, tooltips)
-├── content.css                  # Tooltips and input alert banner styles
+│   ├── threat-config.test.js    # Threat configuration immutability & factory tests
+│   ├── url-safety.test.js       # URL safety, dangerous schemes, open redirects tests
+│   └── e2e/
+│       ├── cdp-client.js        # Native Chrome DevTools Protocol client
+│       └── extension-lifecycle.test.js # Headless lifecycle & UI integration tests
+├── managed_schema.json          # Chrome Enterprise managed storage schema
 ├── manifest.json                # Chrome Extension Manifest V3 configuration
 ├── package.json                 # Node package configuration and test scripts
 ├── README.md                    # System documentation and architecture guide
@@ -109,7 +134,7 @@ D:\Practice\osn-safety-scanner\
 ```
 
 ### Module Design Pattern
-Each core analyzer (`core/url-analyzer.js`, `core/pii-analyzer.js`, `core/scam-analyzer.js`) is constructed using the Universal Module Definition (UMD) pattern:
+Each core analyzer (`src/core/url-analyzer.js`, `src/core/pii-analyzer.js`, `src/core/scam-analyzer.js`, `src/core/compat.js`, `src/core/threat-config.js`) is constructed using the Universal Module Definition (UMD) pattern:
 ```javascript
 (function (root, factory) {
   if (typeof module === "object" && module.exports) {

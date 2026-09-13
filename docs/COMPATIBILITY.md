@@ -1,6 +1,6 @@
 # OSN Guard — Cross-Browser Compatibility Guide
 
-> **Branch:** `audit/teamwork-adaptability` · **Shim:** `core/compat.js` · **Version:** 1.3.0
+> **Branch:** `docs/continuous-ops` · **Shim:** `src/core/compat.js` · **Version:** 1.3.0
 
 This document describes how OSN Guard runs across Chromium MV3, Firefox Gecko,
 and Safari WebExtensions from a **single unified source tree** — zero bundlers,
@@ -46,7 +46,7 @@ zero runtime dependencies.
 
 ## 2. Compatibility Shim Architecture
 
-The shim lives at **`core/compat.js`** (828 lines) and is loaded as the
+The shim lives at **`src/core/compat.js`** (828 lines) and is loaded as the
 **first** script in every browser context — content scripts, extension pages,
 and (via `importScripts`) the service worker background.
 
@@ -202,7 +202,7 @@ packager (`scripts/pack.js`) generates per-target manifests in `dist/`:
 ```json
 {
   "manifest_version": 3,
-  "background": { "service_worker": "background.js" },
+  "background": { "service_worker": "src/background/service-worker.js" },
   "storage": { "managed_schema": "managed_schema.json" }
 }
 ```
@@ -215,8 +215,8 @@ The packager applies these transforms:
 
 | Field | Transformation |
 |---|---|
-| `background.service_worker` | Replaced with `background.scripts: ["background.js"]` (Event Page model) |
-| `browser_specific_settings` | Added: `{ "gecko": { "id": "osn-guard@osnguard", "strict_min_version": "109.0" } }` |
+| `background.service_worker` | Replaced with `background.scripts: ["src/core/compat.js", "src/core/threat-config.js", "src/core/url-analyzer.js", "src/core/pii-analyzer.js", "src/core/scam-analyzer.js", "src/background/service-worker.js"]` (Event Page model) |
+| `browser_specific_settings` | Added: `{ "gecko": { "id": "osn-guard@extension.local", "strict_min_version": "109.0" } }` |
 | `storage.managed_schema` | Removed (not supported on AMO without review approval) |
 
 Firefox Gecko minimum version **109.0** ensures MV3-compatible API surface
@@ -229,7 +229,8 @@ iOS 15.4+). The packager:
 
 | Field | Transformation |
 |---|---|
-| `background.service_worker` | Kept as-is (Safari 15.4+ supports service workers) |
+| `background.service_worker` | Kept as-is (`src/background/service-worker.js`; Safari 15.4+ supports service workers) |
+| `browser_specific_settings` | Added: `{ "safari": { "strict_min_version": "15.4" } }` |
 | `storage.managed_schema` | Removed (Safari does not support managed storage schema) |
 
 > **Note:** Safari WebExtension distribution requires Xcode wrapping via
@@ -244,7 +245,7 @@ iOS 15.4+). The packager:
 
 ```
 Extension installed / updated
-  → background.js parsed (includes all core/*.js via script ordering)
+  → src/background/service-worker.js parsed (imports src/core/*.js via importScripts)
   → OSNCompat.init() runs synchronously
   → chrome.storage.session.get/set available natively
   → Service worker may be suspended after ~30s of inactivity
@@ -252,7 +253,7 @@ Extension installed / updated
 ```
 
 **Important:** OSN Guard's `reconcileOrphanedTabs` and `ensureStorageIntegrity`
-functions in `background.js` are designed to run on every service worker wake-up
+functions in `src/background/service-worker.js` are designed to run on every service worker wake-up
 to heal state that may have been lost during suspension. The compat shim's
 `storage.session` fallback is idempotent across spawns.
 
@@ -260,7 +261,7 @@ to heal state that may have been lost during suspension. The compat shim's
 
 ```
 Extension installed / updated
-  → background.js loaded as an event page (persistent: false equivalent)
+  → src/background/service-worker.js loaded as an event page (persistent: false equivalent)
   → OSNCompat.init() runs synchronously
   → chrome.storage.session NOT available natively → shim prefix-fallback activated
   → Event page unloaded after idle, reloaded on next event
@@ -273,12 +274,12 @@ Content scripts are injected into every page matching `<all_urls>` at
 `document_end`. Load order is determined by the `js` array in `manifest.json`:
 
 ```
-core/compat.js        ← shim must be first
-core/threat-config.js ← default threat configuration data
-core/url-analyzer.js  ← URL safety engine
-core/pii-analyzer.js  ← PII detector
-core/scam-analyzer.js ← Aho-Corasick scam classifier
-content.js            ← DOM scanner, QR quishing detector
+src/core/compat.js        ← shim must be first
+src/core/threat-config.js ← default threat configuration data
+src/core/url-analyzer.js  ← URL safety engine
+src/core/pii-analyzer.js  ← PII detector
+src/core/scam-analyzer.js ← Aho-Corasick scam classifier
+src/content/scanner.js    ← DOM scanner, QR quishing detector
 ```
 
 The shim runs at parse time (top-level IIFE), so all subsequent scripts have
@@ -288,15 +289,15 @@ The shim runs at parse time (top-level IIFE), so all subsequent scripts have
 
 ## 8. Content Script Loading Order
 
-All extension pages (`popup/popup.html`, `options/options.html`) declare scripts
+All extension pages (`src/ui/popup/popup.html`, `src/ui/options/options.html`) declare scripts
 in the same dependency order as the manifest `content_scripts` array:
 
 ```html
-<script src="../core/compat.js"></script>
-<script src="../core/threat-config.js"></script>
-<script src="../core/url-analyzer.js"></script>
-<script src="../core/pii-analyzer.js"></script>
-<script src="../core/scam-analyzer.js"></script>
+<script src="../../core/compat.js"></script>
+<script src="../../core/threat-config.js"></script>
+<script src="../../core/url-analyzer.js"></script>
+<script src="../../core/pii-analyzer.js"></script>
+<script src="../../core/scam-analyzer.js"></script>
 <script src="popup.js"></script>  <!-- or options.js -->
 ```
 
@@ -320,7 +321,7 @@ same order.
 # Syntax check all source files
 npm run check
 
-# Run all 335+ unit tests
+# Run all 241 unit tests
 npm test
 
 # Run E2E lifecycle tests (requires Chromium in PATH)
@@ -353,12 +354,14 @@ dist/
 ### Files Included in Every Package
 
 ```
-manifest.json            background.js        content.js          content.css
-managed_schema.json      core/compat.js       core/threat-config.js
-core/url-analyzer.js     core/pii-analyzer.js core/scam-analyzer.js
-popup/popup.html         popup/popup.js       popup/popup.css
-options/options.html     options/options.js   options/options.css
-assets/icons/icon-16.png assets/icons/icon-48.png assets/icons/icon-128.png
+manifest.json                 managed_schema.json           README.md
+src/background/service-worker.js
+src/content/scanner.js        src/content/scanner.css
+src/core/compat.js            src/core/threat-config.js
+src/core/url-analyzer.js      src/core/pii-analyzer.js      src/core/scam-analyzer.js
+src/ui/popup/popup.html       src/ui/popup/popup.js         src/ui/popup/popup.css
+src/ui/options/options.html   src/ui/options/options.js     src/ui/options/options.css
+src/assets/icons/icon-16.png  src/assets/icons/icon-48.png  src/assets/icons/icon-128.png
 ```
 
 ---
@@ -403,12 +406,12 @@ vs. the completed state of Milestones 1–3.
 | **Reliability — Storage.managed** | Requires Chrome Enterprise | ✅ NEW: In-memory read-only stub for non-Chrome targets |
 | **Data Safety — PII Detection** | 100% coverage, LRU cache | ✅ Unchanged — config-driven thresholds added |
 | **Data Safety — Scam Detection** | Aho-Corasick trie, ≥ 100k ops/s | ✅ Unchanged — trie rebuilt from config at init |
-| **Architecture — Threat Rules** | Hardcoded in each analyzer | ✅ NEW: Centralized `core/threat-config.js`, data-driven override |
+| **Architecture — Threat Rules** | Hardcoded in each analyzer | ✅ NEW: Centralized `src/core/threat-config.js`, data-driven override |
 | **Architecture — Browser Target** | Single Chrome build | ✅ NEW: Unified source tree, 3 packaged targets |
 | **Architecture — Extensibility** | Code changes required for new rules | ✅ NEW: Config-level rule/threshold injection, no code change needed |
-| **Testing — Unit Tests** | 235 tests / 54 suites | ✅ 335+ tests (100 compat + threat-config suite added) |
-| **Testing — E2E Tests** | 6 lifecycle tests | ✅ Unchanged |
-| **Testing — Benchmarks** | Scam ≥ 100k ops/s | ✅ Unchanged — performance budgets met |
+| **Testing — Unit Tests** | Pre-refactor tests | ✅ 241 unit tests across 55 test suites (100% pass) |
+| **Testing — E2E Tests** | 6 lifecycle tests | ✅ Unchanged (all 6 pass) |
+| **Testing — Benchmarks** | Scam ≥ 100k ops/s | ✅ Unchanged — performance budgets met (> 200k ops/s) |
 | **Compatibility — Chrome** | ✅ Web Store ready | ✅ Web Store ready (unchanged) |
 | **Compatibility — Firefox** | ❌ Not packaged | ✅ AMO-ready zip, Event Page manifest generated |
 | **Compatibility — Safari** | ❌ Not packaged | ✅ Safari zip, MV3 manifest generated |
@@ -416,6 +419,4 @@ vs. the completed state of Milestones 1–3.
 
 ---
 
-*Generated as part of Milestone 3 of the OSN Guard adaptability expansion.
-Branch: `audit/teamwork-adaptability`. Do not merge to `main` without owner
-checkpoint and approval.*
+*Maintained under continuous documentation operations on branch `docs/continuous-ops`.*

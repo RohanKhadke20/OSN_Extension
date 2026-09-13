@@ -45,3 +45,45 @@ Integrity mode: demo
 - [ ] Dedicated PR branch `audit/teamwork-adaptability` is cleanly prepared with atomic, well-documented commits.
 - [ ] `docs/COMPATIBILITY.md` is authored explaining the shim design, manifest differences, and lifecycle behavior across browsers.
 - [ ] Auditor produces a final before/after comparison table embedded in the PR deliverable report.
+
+## Follow-up — 2026-09-13T11:31:06Z
+
+Establish and execute an ongoing, parallel research and documentation operation for OSN Guard (`osn-safety-scanner`) to maintain real-time security intelligence and zero-drift documentation.
+
+Working directory: `D:\Practice\osn-safety-scanner`
+Integrity mode: demo
+
+## Requirements
+
+### R1. Continuous Security & Dependency Research Subagent
+- Track current best practices, WebExtensions MV3 standards across Chromium, Firefox Gecko, and Safari WebExtensions.
+- Track security advisories, CVEs, and breaking changes for extension runtime APIs and platform specifications.
+- Restrict web lookups strictly to verifying specific claims, APIs, or CVEs — zero speculative browsing.
+- Always record precise citation metadata (source URL, retrieval timestamp, author/authority) and flag any findings that contradict existing repository assumptions or architectural invariants.
+
+### R2. Single-Source-of-Truth Documentation Subagent
+- Maintain the `/docs` directory as the authoritative reference: architecture overview, component interactions, setup instructions, API/function references, and an active `CHANGELOG.md`.
+- Enforce zero-drift updates: whenever any code change is made, update corresponding documentation in the exact same commit/batch.
+- Maintain `docs/DECISIONS.md` using lightweight Architecture Decision Record (ADR) format (Context, Decision, Consequences, Status) capturing *why* choices were made.
+
+### R3. Multi-Role Coordination & Safety Guardrails
+- Enforce Worker (research/authoring), Reviewer (accuracy & code-parity verification), Critic (staleness & redundancy prevention), and Auditor (security & privacy gatekeeper) roles.
+- Work on dedicated feature/docs branches (e.g. `docs/continuous-ops`), never committing directly to `main`.
+- Auditor gate: verify zero sensitive data (tokens, API keys, private endpoints, internal credentials) are committed to documentation.
+- Mandatory checkpoint before restructuring the `/docs` directory layout or deleting any existing documentation file.
+
+## Acceptance Criteria
+
+### Research Intelligence Quality
+- [ ] Research findings log citations with verifiable sources and ISO timestamps.
+- [ ] Any identified breaking changes or CVEs are mapped directly to affected repository modules.
+
+### Documentation Completeness & Parity
+- [ ] `/docs` contains architecture overview, module references (`src/core/*`, `src/background/*`, `src/content/*`, `src/ui/*`), setup guidelines, and up-to-date `CHANGELOG.md`.
+- [ ] `docs/DECISIONS.md` records all architectural decisions in structured ADR format.
+- [ ] Documentation accurately reflects the recent `src/` modular reorganization and multi-browser compatibility shim.
+
+### Security & Branching Compliance
+- [ ] Zero secrets, private tokens, or internal credentials committed to documentation or docs logs.
+- [ ] All research and documentation commits remain on a dedicated branch with atomic, topic-isolated commit messages.
+
